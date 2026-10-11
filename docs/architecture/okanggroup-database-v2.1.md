@@ -3,6 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
+| Document version | **2.1.3** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
@@ -14,6 +15,7 @@
 | Public website | Existing Vite site preserved; no framework rewrite required by this contract |
 | Phase-1 decisions recorded | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (direction accepted; full schema still under review) |
 | Architecture frozen | **No** |
+| V2.1.3 amendments | Security-per-migration; cross-client FK integrity; audit survival; private privilege contract; CMS authz boundary; OD register cleanup |
 
 ---
 
@@ -114,12 +116,12 @@ company CMS tables are OkangGroup-tenant (client_id NULL, owner_org flag)
 
 | Schema | Use |
 | --- | --- |
-| `public` | Application tables listed below (RLS enabled on every table) |
+| `public` | Application tables listed below (RLS enabled and forced on every table in the same migration that creates them) |
 | `auth` | Supabase-managed users/sessions (do not redefine) |
 | `storage` | Supabase Storage; buckets referenced by path conventions |
-| `private` (optional later) | `security definer` helper functions only — not exposed via Data API |
+| `private` | `SECURITY DEFINER` RLS helper functions only — not exposed via Data API (OD-02 A). Privilege contract in [§5.1](#51-helper-predicates-and-privilege-contract) |
 
-Per recorded decision **OD-02 A**, helper SQL resides in schema `private` (not exposed via the Data API). See [§14.3](#143-recorded-architecture-decisions-direction-accepted-schema-not-frozen).
+Per recorded decision **OD-02 A**, helper SQL resides in schema `private`. See [§14.3](#143-recorded-architecture-decisions-direction-accepted-schema-not-frozen).
 
 ---
 
@@ -136,14 +138,21 @@ Per recorded decision **OD-02 A**, helper SQL resides in schema `private` (not e
 | Soft lifecycle | Prefer `status` / `archived_at` over hard delete for business entities |
 | Hard delete | Allowed for draft/ephemeral rows only (e.g. unused invitation before accept) |
 
-### 3.2 Actor columns
+### 3.2 Actor columns and account lifecycle
 
-Where a human action is recorded:
+Where a human action is recorded on mutable business rows:
 
-- `created_by uuid NULL REFERENCES profiles(id)`
-- `updated_by uuid NULL REFERENCES profiles(id)`
+- `created_by uuid NULL REFERENCES profiles(id) ON DELETE SET NULL`
+- `updated_by uuid NULL REFERENCES profiles(id) ON DELETE SET NULL`
 
 System jobs set these NULL and set `source = 'system'` where applicable.
+
+**Account removal policy (Issue 3):**
+
+1. Prefer **deactivation / offboarding** (`profiles.account_status = offboarded`) over deleting `auth.users` / `profiles`.
+2. Hard deletion of an auth user is an exceptional break-glass operation, not a normal HR workflow.
+3. Accountability tables must not use `ON DELETE CASCADE` from `profiles` in a way that destroys history. See [§3.9](#39-audit-and-historical-record-survival).
+4. When a profile row is removed in an exceptional case, actor FKs use `ON DELETE SET NULL` and denormalised actor snapshots remain.
 
 ### 3.3 Tenant boundary
 
@@ -154,6 +163,28 @@ System jobs set these NULL and set `source = 'system'` where applicable.
 | Platform-wide configuration | No `client_id`; protected by platform admin permissions |
 
 Every client-scoped table must include `client_id` (denormalised where needed for RLS performance) even if also linked via `project_id` / `cms_instance_id`.
+
+#### 3.3.1 Cross-client referential integrity (mandatory)
+
+`client_id` alone is not sufficient. The database must prevent a row owned by Client A from referencing a project, CMS instance, contract, ticket, or other tenant resource owned by Client B.
+
+**Composite foreign-key pattern (required for client-scoped children):**
+
+1. Parent tables expose a uniqueness suitable for composite references, typically `UNIQUE (id)` plus the natural rule that `id` already implies one `client_id`, and children store both `client_id` and the parent id.
+2. Where a child references a parent that also has `client_id`, define a composite FK such as:
+
+   - `FOREIGN KEY (client_id, project_id) REFERENCES projects (client_id, id)`
+   - `FOREIGN KEY (client_id, cms_instance_id) REFERENCES cms_instances (client_id, id)`
+   - `FOREIGN KEY (client_id, contract_id) REFERENCES contracts (client_id, id)`
+   - `FOREIGN KEY (client_id, invoice_id) REFERENCES invoices (client_id, id)`
+   - `FOREIGN KEY (client_id, ticket_id) REFERENCES tickets (client_id, id)`
+   - `FOREIGN KEY (client_id, monitored_service_id) REFERENCES monitored_services (client_id, id)` (when `client_id` is NOT NULL)
+
+3. Parent tables that are client-scoped must therefore declare `UNIQUE (client_id, id)` (in addition to PK on `id`) so composite FKs are enforceable.
+4. Optional nullable links (e.g. task with no project) omit the composite FK only when the optional column is NULL; when present, the composite FK applies.
+5. Application code must not be the sole enforcement of tenant matching. RLS remains required, but **database constraints are mandatory** for cross-client integrity.
+
+Tables requiring composite uniqueness / FKs include (non-exhaustive): `projects` and all project children; `cms_instances` and registry children; commercial documents; `subscriptions`; support tickets/messages; client-scoped monitoring; client-scoped tasks/approvals when linked to client resources.
 
 ### 3.4 Money and currency
 
@@ -181,7 +212,7 @@ Configurable via Configuration Studio (domain 15):
 
 ### 3.6 Audit coverage
 
-Mutating business tables emit `audit_events` via trigger or application service. `audit_events` is append-only: no UPDATE/DELETE policies for ordinary roles; service role only for retention purge after Owner-approved policy ([OD-04](#14-open-decisions)).
+Mutating business tables emit `audit_events` via trigger or application service. `audit_events` is append-only: no UPDATE/DELETE policies for ordinary roles; service role only for retention purge after Owner-approved policy ([OD-04](#14-open-decisions)). See also [§3.9](#39-audit-and-historical-record-survival).
 
 ### 3.7 Indexing baseline
 
@@ -198,7 +229,37 @@ Mutating business tables emit `audit_events` via trigger or application service.
 | `support-attachments` | Ticket files |
 | `cms-migration-artefacts` | Migration assessment exports (non-sensitive metadata preferred) |
 
-Bucket policies are application/Storage RLS work in a later phase; paths must embed `client_id` for isolation.
+Bucket policies are application/Storage RLS work in a later phase; paths must embed `client_id` for isolation. Storage policies for a bucket must ship in the same implementation tranche that first writes objects to that bucket — never leave a public/authenticated bucket writable without policies.
+
+### 3.9 Audit and historical record survival
+
+**Principle:** Deactivating or removing an account must not destroy accountability history.
+
+| Record class | Survival rule |
+| --- | --- |
+| `audit_events` | Append-only. `actor_profile_id` → `profiles(id) ON DELETE SET NULL`. Also store immutable snapshots: `actor_email`, `actor_display_name` (and optional `actor_account_kind`) copied at event time. |
+| `account_status_events` | Retain after offboarding. `changed_by` → `ON DELETE SET NULL`. Never CASCADE delete the event row when a profile is removed. |
+| `access_reviews` | Retain. `subject_profile_id` / `reviewed_by` → `ON DELETE SET NULL` with snapshot columns for subject/reviewer identity at review time. |
+| Financial / commercial documents | Never CASCADE delete because a staff profile was removed. Actor columns SET NULL; document rows remain. |
+| `task_assignments`, approvals, ticket messages | Prefer SET NULL on actor FKs; keep the operational/history row. |
+| `invitations` | Completed invitations retained for audit; `invited_by` SET NULL if profile removed. |
+
+**Forbidden:** `ON DELETE CASCADE` from `profiles` to `audit_events`, financial documents, contracts, invoices, payment records, or security incident records.
+
+**Auth linkage:** `profiles.id` may reference `auth.users(id)`. Normal offboarding must not delete the auth user until sessions are revoked and a documented retention check passes. If `auth.users` is deleted in a break-glass case, profile handling must still leave audit snapshots intact (profile row may be retained in `offboarded` state with auth unlinked, or removed only after snapshotting — exact procedure is part of OD-09 runbook; default design prefers retain profile row).
+
+### 3.10 Security-with-table rule (migration law)
+
+Every migration that creates or first exposes a `public` table must, in the **same** migration:
+
+1. Create constraints and indexes (including composite tenant FKs where applicable).
+2. `ENABLE ROW LEVEL SECURITY`.
+3. `FORCE ROW LEVEL SECURITY` for table owners where supported / required so bypass via ownership is not accidental.
+4. Create the minimum RLS policies for that table’s policy family ([§5.2](#52-policy-families)).
+5. `REVOKE` direct table privileges from `anon` / `authenticated` as appropriate, then `GRANT` only the intended DML.
+6. Depend on `private` helpers already created in M0/M2 — never ship a table that is selectable by `authenticated` before its policies exist.
+
+There is **no** deferred “security catch-up” migration that first enables RLS for tables already exposed. Hardening tests and Storage bucket policy completion may still have a dedicated late tranche, but initial protection is never postponed.
 
 ---
 
@@ -216,7 +277,7 @@ Extends `auth.users` 1:1. Authorisation data lives here / in grants — **never*
 
 | Column | Type | Constraints |
 | --- | --- | --- |
-| `id` | `uuid` | PK, FK → `auth.users(id)` ON DELETE CASCADE |
+| `id` | `uuid` | PK; FK → `auth.users(id)` — prefer retain profile on offboard; avoid routine auth deletion (see §3.9) |
 | `email` | `citext` | NOT NULL, UNIQUE |
 | `full_name` | `text` | NOT NULL |
 | `display_name` | `text` | NULL |
@@ -224,12 +285,15 @@ Extends `auth.users` 1:1. Authorisation data lives here / in grants — **never*
 | `avatar_url` | `text` | NULL |
 | `account_kind` | `text` | NOT NULL CHECK IN (`staff`, `client_user`, `system`) |
 | `account_status` | `text` | NOT NULL DEFAULT `invited` — values via lookup: `invited`, `active`, `suspended`, `offboarded` |
-| `mfa_required` | `boolean` | NOT NULL DEFAULT false |
+| `mfa_required` | `boolean` | NOT NULL DEFAULT false — enforced true for OD-11 A roles/sensitive grants |
+| `mfa_enforced_at` | `timestamptz` | NULL — when platform marked MFA mandatory for this account |
 | `last_login_at` | `timestamptz` | NULL |
 | `offboarded_at` | `timestamptz` | NULL |
 | … | | |
 
 Indexes: `(account_kind, account_status)`, `(email)`.
+
+**MFA enforcement (OD-11 A):** Login to privileged sessions must fail closed when `mfa_required` is true and the Auth assurance level does not include MFA. Enforcement is both application-side and Auth configuration; UI hiding is not sufficient.
 
 #### `invitations`
 
@@ -257,14 +321,14 @@ Append-ish history of status changes.
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE RESTRICT (offboard instead of delete) |
 | `from_status` | `text` | NULL |
 | `to_status` | `text` | NOT NULL |
 | `reason` | `text` | NULL |
-| `changed_by` | `uuid` | NULL FK → `profiles` |
+| `changed_by` | `uuid` | NULL FK → `profiles` ON DELETE SET NULL |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
 
-No `updated_at`. No UPDATE/DELETE for ordinary roles.
+No `updated_at`. No UPDATE/DELETE for ordinary roles. Survives account deactivation.
 
 ---
 
@@ -508,7 +572,7 @@ Catalogue of services engaged (links to commercial plans optionally).
 | `summary` | `text` | NULL |
 | … | | |
 
-UNIQUE (`client_id`, `code`).
+UNIQUE (`client_id`, `code`). Also `UNIQUE (client_id, id)` to support composite tenant FKs from children (§3.3.1).
 
 Lifecycle stages (default seed; configurable):  
 `enquiry` → `proposal` → `approved` → `planning` → `development` → `testing` → `client_review` → `delivered` → `maintenance`  
@@ -589,7 +653,10 @@ Platform registry only. Per-client content schemas live in the client CMS backen
 | `admin_path` | `text` | NULL (e.g. `/cms/treasure-house`) |
 | `data_residency_note` | `text` | NULL |
 | `excludes_sensitive_modules` | `boolean` | NOT NULL DEFAULT true |
+| `contractual_access_profile` | `text` | NULL — reference/key to contractual restriction set (enforced in platform + external CMS; see §6.5) |
 | … | | |
+
+Also `UNIQUE (client_id, id)` for composite tenant FKs (§3.3.1).
 
 #### `cms_modules`
 
@@ -618,11 +685,14 @@ UNIQUE (`cms_instance_id`, `module_code`). Sensitive modules marked `is_sensitiv
 | `client_id` | `uuid` | NOT NULL |
 | `base_url` | `text` | NOT NULL |
 | `auth_method` | `text` | NOT NULL CHECK IN (`service_jwt`, `m2m_oauth`, `signed_webhook`, `manual`) |
-| `credential_ref` | `text` | NULL — reference to secret store / vault; **never** store raw secrets in this row |
+| `credential_ref` | `text` | NULL — reference to secret store / vault scoped per `cms_instance_id`; **never** store raw secrets in this row; **never** reuse one credential across clients |
+| `credential_rotated_at` | `timestamptz` | NULL |
 | `last_healthy_at` | `timestamptz` | NULL |
 | `last_error` | `text` | NULL |
 | `status` | `text` | NOT NULL DEFAULT `unknown` |
 | … | | |
+
+Composite FK: `FOREIGN KEY (client_id, cms_instance_id) REFERENCES cms_instances (client_id, id)`.
 
 #### `cms_migrations`
 
@@ -1041,7 +1111,9 @@ Critical security categories ignore `enabled = false` for ordinary users.
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `actor_profile_id` | `uuid` | NULL |
+| `actor_profile_id` | `uuid` | NULL FK → `profiles(id) ON DELETE SET NULL` |
+| `actor_email` | `citext` | NULL — snapshot at event time |
+| `actor_display_name` | `text` | NULL — snapshot at event time |
 | `actor_kind` | `text` | NOT NULL (`user`, `system`, `service`) |
 | `action` | `text` | NOT NULL |
 | `entity_type` | `text` | NOT NULL |
@@ -1053,15 +1125,18 @@ Critical security categories ignore `enabled = false` for ordinary users.
 | `user_agent` | `text` | NULL |
 | `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
 
-Indexes: `(client_id, created_at DESC)`, `(actor_profile_id, created_at DESC)`, `(entity_type, entity_id)`.
+Indexes: `(client_id, created_at DESC)`, `(actor_profile_id, created_at DESC)`, `(entity_type, entity_id)`.  
+**No CASCADE from profiles.** No UPDATE/DELETE for `authenticated` / `anon`. Retention purge only via controlled service role after OD-04.
 
 #### `access_reviews`
 
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `subject_profile_id` | `uuid` | NOT NULL |
-| `reviewed_by` | `uuid` | NOT NULL |
+| `subject_profile_id` | `uuid` | NULL FK → `profiles ON DELETE SET NULL` |
+| `subject_email` | `citext` | NOT NULL — snapshot |
+| `reviewed_by` | `uuid` | NULL FK → `profiles ON DELETE SET NULL` |
+| `reviewer_email` | `citext` | NOT NULL — snapshot |
 | `outcome` | `text` | NOT NULL |
 | `notes` | `text` | NULL |
 | `reviewed_at` | `timestamptz` | NOT NULL DEFAULT now() |
@@ -1136,21 +1211,37 @@ Validation: Configuration Studio writes must pass server-side schema validation;
 
 ## 5. Permission and RLS contracts
 
-### 5.1 Helper predicates (intent)
+### 5.1 Helper predicates and privilege contract
 
-Implement as `SECURITY DEFINER` functions in schema `private` (OD-02 A) — not exposed via the Data API:
+Implement as `SECURITY DEFINER` functions in schema `private` (OD-02 A). These functions exist so RLS policies can evaluate grants without granting callers direct SELECT on all grant tables under overly broad policies.
 
-| Function | Intent |
+| Function | Intent | Callable by |
+| --- | --- | --- |
+| `private.current_profile_id()` | `auth.uid()` → active `profiles.id` (null if suspended/offboarded) | `authenticated` (EXECUTE only) |
+| `private.has_permission(code text)` | platform-scoped active grant exists | `authenticated` (EXECUTE only) |
+| `private.has_permission_on_client(code, client_id)` | platform OR matching client scope; also evaluates contractual restriction flags where applicable | `authenticated` (EXECUTE only) |
+| `private.has_permission_on_project(code, project_id)` | client/project scope chain | `authenticated` (EXECUTE only) |
+| `private.has_permission_on_cms(code, cms_instance_id)` | cms scope **and** not blocked by contractual/module restrictions | `authenticated` (EXECUTE only) |
+| `private.is_client_member(client_id)` | active `client_memberships` | `authenticated` (EXECUTE only) |
+| `private.can_read_finance(client_id)` | explicit finance permission — not implied by ops roles | `authenticated` (EXECUTE only) |
+| `private.assert_same_client(...)` | internal helper for triggers validating composite tenant consistency | **not** granted to `authenticated` / `anon` |
+
+#### 5.1.1 Privilege rules (mandatory)
+
+| Rule | Requirement |
 | --- | --- |
-| `private.current_profile_id()` | `auth.uid()` mapped to `profiles.id` |
-| `private.has_permission(code text)` | platform-scoped grant exists |
-| `private.has_permission_on_client(code, client_id)` | grant with platform OR matching client scope |
-| `private.has_permission_on_project(code, project_id)` | client/project scope chain |
-| `private.has_permission_on_cms(code, cms_instance_id)` | cms scope |
-| `private.is_client_member(client_id)` | active `client_memberships` |
-| `private.can_read_finance(client_id)` | explicit finance permission — not implied by ops roles |
+| Schema exposure | `REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated`. No PostgREST exposure of `private`. |
+| Default privileges | No default GRANT that would auto-expose new `private` functions to `authenticated`. |
+| EXECUTE grants | Only the boolean/uuid predicate functions listed as callable by `authenticated` receive `GRANT EXECUTE`. They return non-privileged scalars only (uuid/boolean), never grant-table rowsets. |
+| Internal helpers | Trigger/validation helpers are executable by the role that owns triggers (typically migration owner / `postgres` / Supabase maintainer role), not by end-user roles. |
+| `SECURITY DEFINER` owner | Functions owned by a privileged role; body must set a fixed `search_path` (e.g. `SET search_path = private, public, pg_temp`) to prevent search-path attacks. |
+| RLS interaction | Policies on `public` tables invoke `private.*` predicates in `USING` / `WITH CHECK`. Callers do not bypass RLS on underlying grant tables except through the definer’s carefully scoped reads inside the function. |
+| Service role | `service_role` bypasses RLS by design in Supabase — application servers must not expose it to browsers; use only for trusted server jobs (audit insert, probes, controlled retention). |
+| Forbidden | Exposing SQL that accepts dynamic table/column names from the client; granting `authenticated` ownership of `private` objects; putting definer helpers in `public`. |
 
 **Never** authorise from `auth.jwt() -> user_metadata`. Prefer `profiles` + grants tables; if using JWT claims, only `app_metadata` maintained by service role, with documented refresh lag.
+
+**Auth enforcement strengtheners (design):** suspended/offboarded profiles cause `current_profile_id()` to return null so RLS denies; MFA-required accounts must not receive elevated sessions without MFA (OD-11 A); invitation tokens are single-use hashed secrets (OD-12 A).
 
 ### 5.2 Policy families
 
@@ -1183,9 +1274,9 @@ Client users:
 - Owner: broad platform configuration and commercial administration via permissions on `owner` role — still audited.
 - Owner does **not** automatically receive content access inside external sensitive CMS modules marked `is_sensitive` / `hosted_in = external_cms` without an explicit time-limited audited grant (OD-08 A). Even with such a grant, client contractual access restrictions take precedence and cannot be overridden by an internal Owner grant.
 
-### 5.5 RLS enablement
+### 5.5 RLS enablement (per migration)
 
-`ALTER TABLE … ENABLE ROW LEVEL SECURITY` on every `public` table. No table relies on “hidden from UI” alone. Views that join tenant data use `security_invoker = true` (Postgres 15+).
+`ALTER TABLE … ENABLE ROW LEVEL SECURITY` (and force where required) on every `public` table **in the same migration that creates the table** ([§3.10](#310-security-with-table-rule-migration-law)). No table relies on “hidden from UI” alone. Views that join tenant data use `security_invoker = true` (Postgres 15+).
 
 ---
 
@@ -1195,27 +1286,26 @@ Client users:
 
 | Component | Where it lives | Platform DB responsibility |
 | --- | --- | --- |
-| A. Management UI | Route under okanggroup.com (e.g. `/cms/{slug}`) | AuthZ via grants + `cms_instances` |
-| B. CMS backend | Often separate service/DB | Registry + connection health only |
+| A. Management UI | Route under okanggroup.com (e.g. `/cms/{slug}`) | Platform AuthZ via grants + `cms_instances` — **not** a substitute for external CMS AuthZ |
+| B. CMS backend | Separate service/DB per client (typical) | Registry + connection health + credential refs only |
 | C. Client application | Client domain | Out of platform DB |
 
 ### 6.2 Connection contract (logical)
 
 ```text
-Platform  --(cms_connections.auth_method + credential_ref)-->  Client CMS API
+Platform  --(cms_connections.auth_method + per-instance credential_ref)-->  Client CMS API
 Platform stores: instance metadata, module map, migration state, task links
 Client CMS stores: content, media, domain-specific business data
+External CMS independently enforces its own authorisation
 ```
-
-API operations (design intent, not code): authenticate service identity; authorise acting user scopes mirrored or checked server-side; never copy excluded sensitive modules during migration.
 
 ### 6.3 Management modes
 
 | Mode | Who mutates content in client CMS | Platform tasks |
 | --- | --- | --- |
-| OkangGroup Managed | Staff with cms scope | Full ops workflow |
-| Client Managed | Client portal users | Support + monitoring optional |
-| Hybrid | Both per module ACL | Module-level grants required |
+| OkangGroup Managed | Staff with cms scope **and** external CMS acceptance of that actor | Full ops workflow |
+| Client Managed | Client portal users **and** external CMS AuthZ | Support + monitoring optional |
+| Hybrid | Both per module ACL on **both** sides | Module-level grants required |
 
 ### 6.4 Example registry rows (illustrative, not seed mandates)
 
@@ -1224,6 +1314,22 @@ API operations (design intent, not code): authenticate service identity; authori
 | Treasure House Bible Church International | `treasure-house` | Church website CMS |
 | Noble Express Courier | `noble-express` | Courier website CMS |
 | SparkleValeting | `sparkle-valeting` | Valeting website CMS |
+
+### 6.5 External CMS authorisation boundaries (mandatory; detail in V2.3)
+
+Platform permissions **do not** automatically grant access to an external client database or CMS API.
+
+| Requirement | Rule |
+| --- | --- |
+| Independent AuthZ | Every call into a client CMS must be authorised by that CMS (or its dedicated gateway) using its own rules. Platform RLS is necessary but not sufficient for external data. |
+| Contractual restrictions | `contractual_access_profile` / module `is_sensitive` flags and client-stated exclusions must be evaluated before any proxy or credential use. An Owner temporary grant cannot override an explicit contractual denial (OD-08 A). |
+| Credential isolation | One `credential_ref` per `cms_instance` (or narrower). No shared service credentials across clients. Rotation recorded; revoke on offboarding (OD-09). Raw secrets never in Postgres rows. |
+| Least privilege tokens | Connection credentials must be scoped to the minimum external operations required; sensitive modules remain unreachable when excluded. |
+| No silent data copy | Migration/discovery must not ingest excluded sensitive modules into OkangGroup tables. |
+| Audit | Platform audits who initiated an external action; the external CMS should retain its own access logs where available. |
+| Failure mode | If external AuthZ denies, platform must surface denial — not fall back to a privileged break-glass credential without an audited temporary_access path. |
+
+**V2.3 obligation:** Expand this section into the full CMS Integration Architecture (protocols, token exchange, per-client gateway patterns, pilot checklist). V2.1.3 only locks the security boundary requirements above.
 
 ---
 
@@ -1238,11 +1344,12 @@ API operations (design intent, not code): authenticate service identity; authori
 
 ### 7.2 Staff offboarding
 
-1. Set `profiles.account_status = offboarded`, `offboarded_at = now()`.
+1. Set `profiles.account_status = offboarded`, `offboarded_at = now()` — **default path; do not delete the profile** (§3.9).
 2. End `staff_memberships`, revoke `role_grants` / `temporary_access`.
 3. Reassign open `tasks`, tickets, approvals.
 4. Invalidate sessions (Auth admin API — application phase).
-5. Retain audit history.
+5. Retain `audit_events` and other historical rows with actor snapshots; never CASCADE-delete accountability data.
+6. Auth user deletion only as break-glass after OD-09 checks.
 
 ### 7.3 Client offboarding / archive
 
@@ -1305,42 +1412,44 @@ Monitoring probes: prefer low frequency + manual status for non-critical sites o
 
 Migrations are named for future implementation. **None are applied in this phase.**
 
-| Migration | Depends on | Creates |
-| --- | --- | --- |
-| M0 | — | Extensions (`pgcrypto`, `citext`); `updated_at` trigger fn; optional `private` schema |
-| M1 | M0 | `profiles`, `invitations`, `account_status_events`; profile trigger on `auth.users` |
-| M2 | M1 | `permissions`, `roles`, `role_permissions`, `access_scopes`, `role_grants`, `temporary_access`; seed permission catalogue + system roles |
-| M3 | M1 | `departments`, `teams`, `job_titles`, `staff_memberships` |
-| M4 | M1–M2 | `clients`, `client_contacts`, `client_memberships`, `client_services` |
-| M5 | M4 | `service_plans`, `quotations`, `contracts`, `subscriptions`, `invoices`, `invoice_lines` |
-| M6 | M4–M5 | `projects`, deliverables, milestones, change_requests, project_documents |
-| M7 | M4 | `cms_instances`, `cms_modules`, `cms_connections`, `cms_migrations` |
-| M8 | M1–M2 | Company CMS tables + `contact_enquiries` |
-| M9 | M3–M7 | `tasks`, `task_assignments`, `task_dependencies`, `approvals` |
-| M10 | M5 | `payment_records`, `credit_notes`, `refunds`, `expenses`, `fx_rates` |
-| M11 | M4 | `tickets`, `ticket_messages`, `incidents` |
-| M12 | M4–M7 | `monitored_services`, `health_checks`, `alerts` |
-| M13 | M1 | `notifications`, `notification_preferences`, `delivery_attempts` |
-| M14 | M1 | `audit_events`, `access_reviews`, `security_incidents`; audit triggers on critical tables |
-| M15 | M2 | `settings`, `feature_flags`, `workflow_definitions`, `lookup_values`; seed workflows + lookups |
-| M16 | M2–M15 | RLS policies + helper functions; Storage bucket policies (app phase may split) |
+**Security law:** Each migration that creates `public` tables also creates that tranche’s constraints (including composite tenant FKs), enables/forces RLS, attaches policies, and applies GRANTs/REVOKEs ([§3.10](#310-security-with-table-rule-migration-law)). Newly exposed tables must never be reachable by `anon`/`authenticated` without their intended policies.
+
+| Migration | Depends on | Creates (tables/objects) | Security delivered in same migration |
+| --- | --- | --- | --- |
+| M0 | — | Extensions (`pgcrypto`, `citext`); `updated_at` trigger fn; schema `private`; `REVOKE` on `private` from `PUBLIC`/`anon`/`authenticated` | Private schema privilege baseline (§5.1.1) |
+| M1 | M0 | `profiles`, `invitations`, `account_status_events`; profile linkage rules | RLS + policies for identity tables; deny hard-delete paths for ordinary roles |
+| M2 | M1 | Permissions domain tables; seed system permissions/roles; **core `private.*` predicates** + EXECUTE grants | RLS on grant tables; helpers usable by later policies |
+| M3 | M1–M2 | `departments`, `teams`, `job_titles`, `staff_memberships` | RLS for org tables |
+| M4 | M2 | `clients`, `client_contacts`, `client_memberships`, `client_services`; `UNIQUE (client_id, id)` pattern begins | RLS + tenant isolation for client directory |
+| M5 | M4 | `service_plans`, quotations, contracts, subscriptions, invoices, lines; composite tenant FKs | RLS for commercial tables (`finance.*`) |
+| M6 | M4–M5 | Projects + children; `UNIQUE (client_id, id)` + composite FKs | RLS for project tables |
+| M7 | M4 | CMS registry tables; composite FKs; credential_ref isolation constraints | RLS for registry; no secret plaintext; deny cross-client CMS links |
+| M8 | M2 | Company CMS tables + `contact_enquiries` | RLS for company CMS; public insert path for enquiries carefully scoped |
+| M9 | M3–M7 | Tasks, assignments, dependencies, approvals; composite FKs when client-linked | RLS for operations |
+| M10 | M5 | Payments, credit notes, refunds, expenses, `fx_rates` | RLS for payments; immutable financial history rules |
+| M11 | M4 | Tickets, messages, incidents; composite FKs | RLS + internal vs client_visible message split |
+| M12 | M4–M7 | Monitoring tables | RLS; probes write via service role only |
+| M13 | M1–M2 | Notifications stack | RLS (users see own notifications) |
+| M14 | M1–M2 | `audit_events`, `access_reviews`, `security_incidents` with snapshot columns + SET NULL actor FKs; audit triggers on critical tables already present | RLS: append/insert via trigger or service role; SELECT limited; no UPDATE/DELETE for users |
+| M15 | M2 | Configuration Studio tables; workflow/lookup seeds; validation constraints for OD-05 A | RLS for settings/flags/workflows |
+| M16 | M0–M15 | **Hardening only:** security regression tests checklist artefacts (design), Storage bucket policy completion for buckets first used in app phase, advisor remediations, optional policy performance indexes — **not** the first enablement of table RLS | Confirms no table lacks RLS; does not introduce delayed first protection |
 
 Mapping to V2.0 delivery phases:
 
 | V2.0 phase | Migrations |
 | --- | --- |
-| 1 Database foundation & auth | M0–M2 |
+| 1 Database foundation & auth | M0–M2 (including private helpers + identity RLS) |
 | 2 Roles, departments, staff | M2–M3 |
-| 3 Owner dashboard | reads from M1–M15 (views later) |
+| 3 Owner dashboard | reads from secured tables (views later) |
 | 4 Clients & projects | M4–M6 |
 | 5 Company CMS | M8 |
-| 6 Client CMS framework | M7 |
+| 6 Client CMS framework | M7 (+ V2.3 external AuthZ) |
 | 7 Work allocation | M9 |
 | 8 Finance & subscriptions | M5, M10 |
 | 9 Support & monitoring | M11–M12 |
 | 10 Reports, config, audit | M13–M15 |
-| 11 CMS integration pilot | data in M7 + external systems |
-| 12 Security testing | M16 hardening + tests |
+| 11 CMS integration pilot | M7 data + external systems under §6.5 |
+| 12 Security testing | M16 hardening + cross-tenant negative tests |
 
 ---
 
@@ -1373,11 +1482,23 @@ Before any production migration apply:
 | --- | --- | --- |
 | 2.1.0 | 2026-10-11 | Initial complete 15-domain design contract for Owner review |
 | 2.1.1 | 2026-10-11 | Added option sets for six Phase-1 critical decisions |
-| 2.1.2 | 2026-10-11 | Recorded Owner choices OD-02/05/08/11/12/14 = A with OD-08/OD-14 safeguards; document remains under review / **not frozen** |
+| 2.1.2 | 2026-10-11 | Recorded Owner choices OD-02/05/08/11/12/14 = A with OD-08/OD-14 safeguards |
+| 2.1.3 | 2026-10-11 | Owner review amendments: RLS-per-migration; cross-client composite FKs; audit/actor survival; private privilege contract; external CMS AuthZ boundary (§6.5); Open Decisions register cleanup. **Still not frozen.** |
 
-**Git status note:** Published on a dedicated review branch for GitHub examination. Must not be merged to the production/default branch until the Owner freezes V2.1 after full schema review. Coding HOLD remains; no migrations.
+### 13.1 V2.1.3 review amendment register
 
-**Recommended specification sequence (Owner):** V2.1 review → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
+| Issue | Decision | Documented in |
+| --- | --- | --- |
+| 1 Security migrations too late | Integrate RLS/constraints with each table migration; M16 = hardening only | §3.10, §5.5, §10 |
+| 2 Client isolation | Composite tenant FKs / `UNIQUE (client_id, id)` | §3.3.1 |
+| 3 Audit vs account removal | Prefer deactivation; SET NULL + snapshots; no CASCADE destroying history | §3.2, §3.9, Domain 14 |
+| 4 Private function privileges | Precise EXECUTE/REVOKE/`search_path` contract | §5.1, §5.1.1 |
+| 5 External CMS AuthZ | Independent AuthZ, contractual limits, credential isolation | §6.5 → mandatory for V2.3 |
+| 6 OD register duplication | Single status table | §14 |
+
+**Git status note:** Published on dedicated review branch `docs/architecture-v2.1-review`. Must not merge to production/default until Owner freezes V2.1. Coding HOLD; no migrations.
+
+**Recommended specification sequence (Owner):** Finish V2.1 review (incl. remaining open decisions) → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
 
 ---
 
@@ -1385,25 +1506,24 @@ Before any production migration apply:
 
 Cursor must not invent answers for these. Owner (or designated officer) decides before the relevant migration phase.
 
-| ID | Topic | Why it blocks | Needed decision |
-| --- | --- | --- | --- |
-| OD-01 | Payment provider | Payments domain provider fields / webhooks | Provider choice, settlement entity, compliance obligations; or confirm manual-only indefinitely |
+**Decision register (single authoritative table):**
+
 | ID | Topic | Status | Decision / remaining need |
 | --- | --- | --- | --- |
-| OD-01 | Payment provider | Open | Provider choice, settlement entity, compliance; or confirm manual-only |
-| OD-02 | Private schema for helpers | **Recorded A** | See §14.3 — direction accepted; verify against full schema |
+| OD-01 | Payment provider | Open | Provider choice, settlement entity, compliance; or confirm manual-only indefinitely |
+| OD-02 | Private schema for helpers | **Recorded A** | See §14.3 — direction accepted; privilege contract in §5.1.1 |
 | OD-03 | Tax and rounding | Open | VAT/GST treatment per jurisdiction; rounding mode |
 | OD-04 | Retention | Open | Retention periods; legal hold; purge authority |
-| OD-05 | Permission catalogue mutability | **Recorded A** | See §14.3 — direction accepted; verify against full schema |
+| OD-05 | Permission catalogue mutability | **Recorded A** | See §14.3 — Configuration Studio limits |
 | OD-06 | Internal tasks without client | Open | Allow `is_internal` tasks with NULL `client_id`? |
 | OD-07 | Credit/refund approval thresholds | Open | Amount thresholds and required roles |
-| OD-08 | Owner access to client PII / sensitive CMS | **Recorded A** | See §14.3 — plus contractual non-override safeguard |
-| OD-09 | Offboarding runbook | Open | Secret rotation, export package, deletion timelines |
+| OD-08 | Owner access to client PII / sensitive CMS | **Recorded A** | See §14.3 — contractual non-override + §6.5 |
+| OD-09 | Offboarding runbook | Open | Secret rotation, export package, deletion timelines; auth unlink vs retain profile |
 | OD-10 | Subscription dunning | Open | Grace period, CMS suspension, notification cadence |
-| OD-11 | MFA enforcement set | **Recorded A** | See §14.3 |
+| OD-11 | MFA enforcement set | **Recorded A** | See §14.3 — fail closed for privileged sessions |
 | OD-12 | Invitation channel | **Recorded A** | See §14.3; sender domain still OD-15 |
 | OD-13 | First CMS pilot | Open | Which client CMS is first integration target |
-| OD-14 | Admin app hosting | **Recorded A** | See §14.3 — plus public-site independence safeguard |
+| OD-14 | Admin app hosting | **Recorded A** | See §14.3 — public site independence |
 | OD-15 | Official email | Open | `@okanggroup.com` sender for invites/notifications |
 | OD-16 | Cross-border data | Open | Data processing roles; CMS backend residency |
 | OD-17 | Invoice numbering | Open | Format, reset rules, multi-currency sequences |
@@ -1425,7 +1545,7 @@ Owner has recorded option **A** for all six ([§14.3](#143-recorded-architecture
 | **B** | Keep helpers in `public` but `REVOKE ALL` from `anon`/`authenticated` except explicit `GRANT EXECUTE` on named functions | Simpler schema map; higher risk of mis-grant if someone adds a new function carelessly |
 | **C** | No DB helpers; enforce all authorisation only in application server code | Weaker defense-in-depth; RLS becomes thin; not recommended for multi-tenant client data |
 
-**Affects:** M0, M16, every RLS policy.
+**Affects:** M0–M2 foundation, every RLS policy in M1+.
 
 ---
 
@@ -1530,12 +1650,16 @@ These decisions do **not** authorise SQL migrations, application code, or produc
 - [ ] Confirm Supabase MCP access as `okanggroup@gmail.com` to `prbgsnxpwyepdggdysnt`
 - [ ] Examine complete domain table list and amend if required
 - [ ] Examine RBAC + scope model and amend if required
-- [ ] Examine CMS registry boundary (no sensitive module ingestion by default)
-- [ ] Examine migration order M0–M16
+- [ ] Examine CMS registry boundary + §6.5 external AuthZ requirements
+- [ ] Examine migration order M0–M16 (RLS co-located; M16 hardening only)
+- [ ] Examine cross-client composite FK requirements (§3.3.1)
+- [ ] Examine audit survival rules (§3.9)
 - [x] Record Phase-1 decisions OD-02, OD-05, OD-08, OD-11, OD-12, OD-14 (option A) — **direction only; not a freeze**
+- [x] Apply V2.1.3 security amendments from Owner review (this revision)
+- [ ] Resolve remaining open decisions (OD-01, OD-03, OD-04, OD-06, OD-07, OD-09, OD-10, OD-13, OD-15–OD-18) as needed before later phases
 - [ ] Freeze V2.1 explicitly after full schema review (not done)
 - [ ] Authorise a future coding phase explicitly (this document alone does not authorise coding)
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.2 — under review on a dedicated GitHub branch. NOT FROZEN. CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.3 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. CODING HOLD remains in effect.**
