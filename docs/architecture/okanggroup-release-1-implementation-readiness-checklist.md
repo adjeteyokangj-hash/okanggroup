@@ -2,13 +2,14 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **CHECKLIST REVIEWED — CODING HOLD (Option C)** |
-| Version | **1.1.2** |
+| Status | **RELEASE 1 DESIGN INTENT FROZEN (Option A) — CODING HOLD** |
+| Version | **1.2.0** |
 | Based on | Cost Plan **1.1.2**; Database **V2.1.9** (P2); preserved **V2.1.8A**; V2.2.2; V2.3.1 |
-| Does not modify | Production Vite site; coding still HOLD |
-| Migration approach | **P2 accepted into V2.1.9** with mandatory composite tenant FKs — B1 cleared at documentation level |
-| Coding / SQL / migrations / deploy | **HOLD** |
-| Owner decision now | **Option C** — HOLD until P2 is accepted into a V2.1 revision and R1 acceptance criteria frozen (Option A), then consider Option B |
+| Release 1 design freeze | **Option A approved 2026-10-11** — V2.1.9 + eight acceptance criteria locked for R1 build planning |
+| Full platform architecture freeze | **Not authorised** (OD-04 open; V2.2/V2.3 not frozen) |
+| Migration approach | **P2 accepted into V2.1.9** with mandatory composite tenant FKs — B1 cleared |
+| Coding / SQL / migrations / deploy | **HOLD** — Option A does **not** authorise implementation |
+| Next | One coordinated Release 1 build authorisation (not per-feature approvals), when Owner is ready |
 
 Legend: **Ready** = design sufficient to implement when coding is authorised · **Gap** = must resolve before freeze/coding · **N/A** = not required for current slice
 
@@ -25,7 +26,8 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | 0.5 | DR-05 R3 schema out of R1 | ✅ Ready | Cost Plan 1.1.2 |
 | 0.6 | DR-06 Supabase workspace MCP | ✅ Ready | PASS `prbgsnxpwyepdggdysnt` |
 | 0.7 | DR-07 retain-by-default / no purge | ✅ Ready | OD-04 still open for purge later |
-| 0.8 | Explicit coding authorisation | ⬜ Gap | Not given — HOLD |
+| 0.8 | Explicit coding authorisation | ⬜ Gap | Not given — HOLD (separate from Option A) |
+| 0.9 | Option A — Freeze R1 design intent | ✅ Done | 2026-10-11: V2.1.9 + eight acceptance criteria |
 
 ---
 
@@ -90,13 +92,13 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | # | Requirement | Design ref | Assessment | Supporting note |
 | --- | --- | --- | --- | --- |
 | 4.1 | Fixed R1 scope | Cost Plan; DR-03 | **Ready** | Policy approved |
-| 4.2 | Acceptance criteria Owner-agreed | Checklist §4.1 below | **Gap** | Criteria written; Owner has not yet formally frozen them (Option A) |
+| 4.2 | Acceptance criteria Owner-agreed | Checklist §4.1 below | **Ready** | **Frozen** under Option A (2026-10-11) |
 | 4.3 | Incremental milestones | Cost Plan §9 | **Ready** | Sequence defined |
 | 4.4 | Free Supabase + existing Vercel; no new SaaS | Cost Plan §6–7; DR-06 | **Ready** | |
 | 4.5 | Complete/test each slice before dependents | Cost Plan §9 | **Ready** | Delivery style approved |
 | 4.6 | Thin V2.1 only if PA-06; no R3 schema in R1 | DR-04, DR-05 | **Ready** | Plus possible thin **dependency** amendment for M6/M9 (§7) — not R3 feature schema |
 
-### 4.1 Release 1 acceptance criteria (draft — not frozen)
+### 4.1 Release 1 acceptance criteria (**FROZEN** — Option A, 2026-10-11)
 
 1. Owner signs in with MFA.  
 2. Small staff set managed within RBAC + scopes.  
@@ -107,7 +109,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 7. Privileged actions appear in audit.  
 8. Public design/navigation intact; no finance or external CMS shipped.
 
-**Status:** Documented — freeze under Option A when Owner ready.
+**Status:** Frozen for Release 1. Scope changes require explicit Owner decision. Does not authorise coding.
 
 ---
 
@@ -163,8 +165,8 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | ID | Blocker | Severity |
 | --- | --- | --- |
 | B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **Resolved (docs)** — V2.1.9 P2 + composite tenant FKs; no migrations applied |
-| B2 | Owner has not frozen R1 acceptance criteria (4.2) / Option A | **High** for freeze |
-| B3 | Coding authorisation not given (0.8) | **High** for any implementation |
+| B2 | Owner has not frozen R1 acceptance criteria (4.2) / Option A | **Resolved** — Option A 2026-10-11 |
+| B3 | Coding authorisation not given (0.8) | **High** — still required; prefer one coordinated R1 build auth |
 | B4 | Publish mechanism not selected (2.7) | **Medium** — blocks CMS publish slice, not Milestone 1 auth |
 | B5 | OD-15 email sender for invitations (operational) | **Medium** — blocks email invites; Owner bootstrap may use dashboard create |
 
@@ -191,10 +193,10 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 
 | Step | Action |
 | --- | --- |
-| 1 | Keep **Option C — coding HOLD** (current) |
-| 2 | ~~Accept P2 into V2.1~~ **Done (V2.1.9 docs)** — B1 cleared at documentation level |
-| 3 | Freeze R1 acceptance criteria → **Option A** (not yet) |
-| 4 | Separately → **Option B** authorise Milestone 1 only (Auth + M0–M2 + MFA), not full R1 |
+| 1 | ~~Option A~~ **Done** — R1 design intent frozen on V2.1.9 + eight criteria |
+| 2 | Keep coding / SQL / migrations / deployment **HOLD** until coordinated R1 build authorisation |
+| 3 | When ready: **one** Owner authorisation for complete Release 1 build (incremental delivery inside fixed scope; mandatory security/integration/deploy gates) |
+| 4 | Do **not** require a separate Owner approval for each internal R1 slice after that authorisation |
 
 ---
 
@@ -206,5 +208,6 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | 1.1.0 | 2026-10-11 | Final readiness review; Option C |
 | 1.1.1 | 2026-10-11 | Owner approved P2 for docs-only prep; proposal filed |
 | 1.1.2 | 2026-10-11 | P2 accepted into V2.1.9 with composite FKs; B1 resolved at docs level; coding HOLD |
+| 1.2.0 | 2026-10-11 | **Option A:** Freeze Release 1 design intent (V2.1.9 + eight acceptance criteria). Coding HOLD |
 
-**End of checklist 1.1.2 — documentation only. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD.**
+**End of checklist 1.2.0 — Release 1 design intent frozen. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD.**

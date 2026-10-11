@@ -2,11 +2,14 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
+| Status | **DESIGN ONLY — RELEASE 1 DESIGN INTENT FROZEN (Option A) — FULL PLATFORM NOT FROZEN — CODING HOLD** |
 | Document version | **2.1.9** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
 | Prior baseline (comparison) | [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md) — preserved accepted baseline |
-| Working baseline | **2.1.9** = 2.1.8A + **P2** Release 1 dependency amendment only (M6/M9 deps; deferred `contract_id` / `cms_instance_id`; mandatory composite tenant FKs when those links are added). **OD-04 still open**. Architecture **not frozen**. No coding/migrations authorised. |
+| Working baseline | **2.1.9** = 2.1.8A + **P2** Release 1 dependency amendment only (M6/M9 deps; deferred `contract_id` / `cms_instance_id`; mandatory composite tenant FKs when those links are added). **OD-04 still open**. |
+| Release 1 design intent | **Frozen** 2026-10-11 (Option A) for R1 scope + checklist acceptance criteria — see [okanggroup-release-1-implementation-readiness-checklist.md](./okanggroup-release-1-implementation-readiness-checklist.md) |
+| Full architecture frozen | **No** |
+| Coding / SQL / migrations / deploy | **HOLD** — Option A does not authorise implementation |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -18,7 +21,7 @@
 | Phase-1 architecture decisions | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (**preserved**) |
 | Business decisions recorded | See §14.5 (OD-04 still pending) |
 | Still open | **OD-04** — §16 proposed; **legal verification not completed**; not approved / not closed |
-| Architecture frozen | **No** |
+| Architecture frozen | **No** (R1 design intent frozen separately — Option A) |
 | Legal verification claimed | **No** — checklist in §16.9 only |
 | Technical readiness report | [okanggroup-v2.1-technical-readiness-report.md](./okanggroup-v2.1-technical-readiness-report.md) — **not a freeze** |
 
@@ -1831,7 +1834,7 @@ Before any production migration apply:
 | 2.1.7-R | 2026-10-11 | Companion technical readiness report for §16.8 checks. OD-04 still open; Supabase MCP unresolved; freeze not authorised |
 | 2.1.8 | 2026-10-11 | Documentation amendments A1 (exhaustive composite parents/FKs), A2 (M4 tenant-root wording), A3 (tax + retention/deletion governance inventory). OD-04 remains OPEN. Not frozen |
 | 2.1.8A | 2026-10-11 | A1 correction: composite FKs must reference ordinary non-partial `UNIQUE (client_id, id)`; remove partial-unique-as-FK-target guidance. OD-04 OPEN. Not frozen. **Preserved** at [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md) |
-| 2.1.9 | 2026-10-11 | **P2 only:** M6 depends on M4; M9 depends on M3–M4–M6; defer `projects.contract_id` and `tasks.cms_instance_id`; safe add-later procedure; **mandatory composite tenant FKs** when those links are introduced. OD-04 OPEN. Not frozen. Coding/migrations HOLD |
+| 2.1.9 | 2026-10-11 | **P2 only:** M6 depends on M4; M9 depends on M3–M4–M6; defer `projects.contract_id` and `tasks.cms_instance_id`; safe add-later procedure; **mandatory composite tenant FKs** when those links are introduced. OD-04 OPEN. Full architecture not frozen. **Option A:** Release 1 design intent frozen 2026-10-11. Coding/migrations HOLD |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -2392,4 +2395,4 @@ When counsel answers are received, update a new architecture revision that:
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.9 — under review on branch `docs/architecture-v2.1-review`. P2 Release 1 dependency amendment applied (documentation only). V2.1.8A preserved for comparison. NOT FROZEN. OD-04 OPEN. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.9 — Release 1 design intent frozen (Option A, 2026-10-11). Full platform architecture NOT frozen. V2.1.8A preserved for comparison. OD-04 OPEN. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD remains in effect.**

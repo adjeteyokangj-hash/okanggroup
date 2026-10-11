@@ -2,13 +2,14 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **DOCUMENTATION ONLY — DR-01–DR-07 APPROVED — NOT AN ARCHITECTURE FREEZE — CODING HOLD** |
-| Document version | **1.1.2** |
+| Status | **DOCUMENTATION ONLY — DR-01–DR-07 APPROVED — R1 DESIGN INTENT FROZEN (Option A) — CODING HOLD** |
+| Document version | **1.1.3** |
 | Based on | Database **V2.1.8A**; Workflows **V2.2.2**; CMS integrations **V2.3.1** |
 | Does not modify | Those three accepted baselines (or the production Vite site) |
 | DR-01–DR-07 | **Owner-approved** 2026-10-11 — establishes direction only; **DR-06 verified PASS** |
-| Coding / migrations / deploy | **HOLD** — approval of DR-01–DR-07 does **not** authorise implementation |
-| Architecture freeze | **Not authorised** |
+| Release 1 design intent | **Frozen** (Option A, 2026-10-11) on V2.1.9 + eight acceptance criteria — see Release 1 checklist 1.2.0 |
+| Coding / migrations / deploy | **HOLD** — Option A does **not** authorise implementation |
+| Full architecture freeze | **Not authorised** |
 
 ---
 
@@ -338,5 +339,6 @@ These decisions set **development direction** only. They do **not** freeze archi
 | 1.1.0 | 2026-10-11 | CMS→Vite publish + rollback (§3.1); engineering vs infrastructure cost; fixed scope + incremental delivery |
 | 1.1.1 | 2026-10-11 | Owner approved DR-01–DR-07; coding remains HOLD |
 | 1.1.2 | 2026-10-11 | DR-06 Supabase workspace MCP verification PASS; coding remains HOLD |
+| 1.1.3 | 2026-10-11 | Option A: Release 1 design intent frozen; coding remains HOLD |
 
-**End of Development Readiness and Cost Plan 1.1.2 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
+**End of Development Readiness and Cost Plan 1.1.3 — documentation only. R1 design intent frozen. Does not authorise coding. CODING HOLD.**
