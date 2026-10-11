@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **DESIGN ONLY — UNDER REVIEW — CODING HOLD** |
-| Document version | **2.2.0** |
+| Status | **DESIGN ONLY — UNDER REVIEW — CODING HOLD — NOT FROZEN** |
+| Document version | **2.2.1** |
 | Depends on | Database Architecture **V2.1.8A** (accepted technical baseline — **not modified by this document**) |
 | Supabase target | `okanggroup-platform` / `prbgsnxpwyepdggdysnt` (implementation later; not altered here) |
 | V2.1 freeze | **Not authorised** by this document |
@@ -18,12 +18,16 @@ V2.2 defines how OkangGroup operates day to day on top of the V2.1.8A data model
 
 - Staff responsibilities and organisational placement  
 - Role and permission matrices (RBAC + scope)  
-- Task assignment and workload delegation  
-- Approval workflows  
+- Task assignment with availability and workload eligibility  
+- Strict permission delegation (no self-escalation)  
+- Approval workflows with identity-based separation of duties  
+- Module-specific client CMS access intent (external enforcement in V2.3)  
+- Secure invitation / onboarding and privileged MFA  
+- Scope-filtered management dashboards  
 - Client portal access  
 - Management delegation without Owner bottleneck  
 
-It does **not** change table schemas, freeze V2.1, or authorise implementation.
+It does **not** change V2.1.8A schema text, freeze V2.1 or V2.2, or authorise implementation. Schema gaps are listed as **proposed V2.1 amendments** in §19.
 
 ---
 
@@ -33,7 +37,10 @@ It does **not** change table schemas, freeze V2.1, or authorise implementation.
 | --- | --- |
 | **P1 — Owner control** | The Owner retains final authority over platform configuration, commercial policy, sensitive grants, and break-glass access — always audited, and **never** overriding client contractual / legal restrictions (OD-08 A). |
 | **P2 — Delegated management** | Authorised managers assign and supervise work within their department/team/client scopes without Owner approval for every routine action. |
-| **P3 — Client isolation** | Staff see only clients, projects, CMS instances, and documents within their active `access_scopes`. Cross-tenant access is denied by design (V2.1.8A RLS + composite FKs). |
+| **P3 — Client isolation** | Staff see only clients, projects, CMS instances, modules, and documents within their active scopes. Cross-tenant access is denied by design (V2.1.8A RLS + composite FKs). |
+| **P4 — No privilege escalation via delegation** | A principal may grant only permissions and scopes they hold **and** are authorised to delegate; recipients must be eligible (W-B). |
+| **P5 — Identity-based duty separation** | Finance and other critical approvals evaluate the **acting user identity**, not merely whether any of their roles could approve (W-C). |
+| **P6 — Availability ≠ authorisation** | Staff availability and workload inform assignment; they never replace permission or scope checks (W-A). |
 
 Supporting rules already recorded in V2.1:
 
@@ -55,7 +62,7 @@ Supporting rules already recorded in V2.1:
 | `workflow_definitions` | Configurable stage machines |
 | §5 RLS helpers | Runtime enforcement intent (implementation later) |
 
-**Non-interference:** If V2.2 needs a schema change, it must be raised as an explicit V2.1 amendment request — not silently applied here. V2.2.0 assumes V2.1.8A is sufficient.
+**Non-interference:** If V2.2 needs a schema change, it is raised as an explicit **proposed V2.1 amendment** (§19) — not silently applied to V2.1.8A. V2.2.1 still runs conceptually on V2.1.8A plus those proposed extensions.
 
 ---
 
@@ -87,7 +94,7 @@ Supporting rules already recorded in V2.1:
 
 ### 5.2 Permissions (what they may do)
 
-Effective access = active `role_grants` (+ unexpired `temporary_access`) whose `access_scopes` cover the resource **and** required permission codes.
+Effective access = active `role_grants` (+ unexpired `temporary_access`) whose `access_scopes` cover the resource **and** required permission codes **and**, for CMS, any required **module** scope (W-D).
 
 | Scope type | Typical use |
 | --- | --- |
@@ -95,7 +102,8 @@ Effective access = active `role_grants` (+ unexpired `temporary_access`) whose `
 | `department` / `team` | Manager assignment boundaries |
 | `client` | Client Services, ops, CMS work for one client |
 | `project` | Delivery team for one project |
-| `cms_instance` | Editors for one CMS |
+| `cms_instance` | Editors for one CMS (instance-level; not all modules) |
+| `cms_module` *(proposed)* | Module-specific CMS capability within an instance (W-D / §19) |
 
 ---
 
@@ -115,7 +123,7 @@ Permission codes follow V2.1 catalogue style (`domain.action`). System role **co
 | `staff` | Baseline staff access (profile, assigned tasks) | assigned resources |
 | `finance_user` | Quotes, invoices, payments (manual), reports | `platform` or named clients |
 | `support_agent` | Tickets and client-visible replies | scoped `client` |
-| `cms_editor` | Content edit/publish per CMS rules | `cms_instance` |
+| `cms_editor` | Content edit/publish per **module** rules | `cms_instance` + `cms_module` |
 | `client_admin` | Own client portal administration | own `client` |
 | `client_user` | Own client limited portal | own `client` |
 
@@ -126,31 +134,34 @@ Legend: **F** = full within scope · **R** = read · **W** = write/create · **A
 | Capability (permission family) | Owner | Platform Admin | Ops Mgr | Dept/Team Mgr | Staff | Finance | Support | CMS Editor | Client Admin | Client User |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Platform settings / Configuration Studio | F | F† | X | X | X | X | X | X | X | X |
-| Roles & grants (non-owner) | F | F† | X | X | X | X | X | X | X | X |
+| Roles & grants (non-owner) | F | F† | X‡‡ | X‡‡ | X | X | X | X | X | X |
 | Departments / teams | F | F | R | R (own) | R (own) | X | X | X | X | X |
 | Staff directory | F | F | R | R (own dept/team) | R limited | X | X | X | X | X |
+| Staff availability / workload (W-A) | F | F | R scoped | R scoped | R own | X | X | X | X | X |
 | Clients directory | F | F | F scoped | scoped | scoped | R scoped | R scoped | R scoped | own only | own only |
 | Projects | F | F | F scoped | F scoped | RW assigned | R finance-linked | R linked tickets | R linked CMS | R allow-list (OD-18) | R allow-list |
 | Tasks assign / reassign | F | F | F scoped | F scoped | own only | X | own tickets | own CMS tasks | request only | request only |
 | Approvals (routine) | F | A† | A scoped | A scoped | request | A finance‡ | A support‡ | A publish‡ | A client-side‡ | X |
 | Company CMS | F | F | R | R | RW if granted | X | X | F if granted | X | X |
 | Client CMS registry | F | F | F scoped | scoped | scoped | X | R status | F instance | R own status | R own status |
-| Client CMS content (external) | \* | \* | \* scoped | \* scoped | \* scoped | X | X | \* instance | per mode | per mode |
+| Client CMS modules (W-D) | \* | \* | \* module | \* module | \* module | X | X | \* module | per mode/module | per mode/module |
 | Finance (invoices/payments) | F | R | X | X | X | F | X | X | R own invoices | R own if allowed |
 | Credit/refund approve | A‡ | A‡ | X | X | X | request / A‡ | X | X | X | X |
 | Support tickets | F | F | F scoped | scoped | assigned | X | F scoped | X | RW own | RW own limited |
 | Monitoring | F | F | R scoped | X | X | X | R | X | R own if granted | X |
+| Management dashboard (W-F) | F | F | F scoped | F scoped | personal | finance widgets‡ | agent widgets | CMS widgets | client widgets | limited |
 | Audit logs | F | R | X | X | X | X | X | X | X | X |
 | Legal holds / retention purge | F | X§ | X | X | X | X | X | X | X | X |
 
 † Within Owner policy; cannot disable audit or widen RLS via config (V2.1).  
-‡ OD-07: requester ≠ approver for credits/refunds; thresholds configurable.  
+‡ OD-07 + W-C: requester ≠ approver by **user identity** for credits/refunds and financial exceptions; thresholds configurable.  
 § Draft retention policy only; purge execution after OD-04 approval.  
-\* Sensitive modules: temporary_access + contractual profile; Owner grant cannot override client denial (OD-08 A).
+\* Sensitive modules: temporary_access + contractual profile; Owner grant cannot override client denial (OD-08 A).  
+‡‡ Managers may propose or grant **only** within §7.4 delegation rules (W-B); they cannot open Platform Admin grant UI for arbitrary roles.
 
-### 6.3 MFA (OD-11 A)
+### 6.3 MFA (OD-11 A + W-E)
 
-MFA mandatory for: `owner`, `platform_admin`, `finance_user`, and any principal holding `is_sensitive` permissions. Fail closed for privileged sessions.
+MFA mandatory for: `owner`, `platform_admin`, `finance_user`, and any principal holding `is_sensitive` permissions or privileged temporary grants. Privileged accounts must complete MFA **before** accessing protected functions. Fail closed for privileged sessions. Invitation acceptance alone never skips MFA when the approved grant set requires it.
 
 ---
 
@@ -161,15 +172,15 @@ MFA mandatory for: `owner`, `platform_admin`, `finance_user`, and any principal 
 | Action | Minimum role | Required scope | Owner needed? |
 | --- | --- | --- | --- |
 | Create/assign routine task | Team/Dept/Ops Manager | team/department/client covering the resource | No |
-| Reassign within same scope | same | same | No |
+| Reassign within same scope | same | same + assignee eligibility (§7.3) | No |
 | Escalate to another authorised manager | Manager | own scope → target must have scope | No |
-| Approve routine CMS publish (non-sensitive) | Team Manager / designated approver | `cms_instance` | No |
+| Approve routine CMS publish (non-sensitive module) | Team Manager / designated approver | `cms_instance` + module | No |
 | Approve project stage advance (non-commercial) | Ops / Dept Manager | `project` / `client` | No |
-| Invite staff | Platform Admin / Owner | platform | Owner for `owner`/`platform_admin` roles |
-| Grant client scope to staff | Ops Mgr or Platform Admin per policy | that `client` | Owner for finance+sensitive bundles |
+| Invite staff | Platform Admin / Owner | platform; invitation carries **exact** approved grant set (W-E) | Owner for `owner`/`platform_admin` roles |
+| Grant client / module scope to staff | Ops Mgr or Platform Admin per policy **and** §7.4 | only scopes the granter holds and may delegate | Owner for finance + sensitive bundles |
 | Issue invoice | Finance | finance permission | No (policy) |
-| Approve credit/refund over threshold | Distinct approver (OD-07) | finance | Owner/platform_admin if above top threshold |
-| Temporary sensitive CMS access | Owner or Platform Admin per policy | cms + contract check | Owner for break-glass |
+| Approve credit/refund over threshold | Distinct **user** (W-C / OD-07) | finance | Owner/platform_admin if above top threshold |
+| Temporary sensitive CMS access | Owner or Platform Admin per policy | cms module + contract check | Owner for break-glass |
 | Change commercial policy / service plans | Owner (or Platform Admin if delegated) | platform | Owner for material policy |
 
 ### 7.2 Work allocation workflow (example)
@@ -179,29 +190,63 @@ MFA mandatory for: `owner`, `platform_admin`, `finance_user`, and any principal 
 | Step | Actor | System action |
 | --- | --- | --- |
 | 1 | Client Admin / Support | Ticket or task created, `client_id` set |
-| 2 | Operations Manager | Assigns to team or Team Manager (`task_assignments`) |
-| 3 | Team Manager | Assigns Editor; sets priority/due |
-| 4 | CMS Editor | Performs work in authorised CMS scope |
+| 2 | Operations Manager | Assigns to team or Team Manager after eligibility check (§7.3) |
+| 3 | Team Manager | Assigns Editor; sets priority/due; sees availability/workload |
+| 4 | CMS Editor | Performs work only in authorised **modules** |
 | 5 | Reviewer | Approval record `pending` → `approved` / `rejected` |
-| 6 | Publisher | Publish transition per `workflow_definitions` |
-| 7 | Audit | All assignment/approval changes logged |
+| 6 | Publisher | Publish transition per `workflow_definitions` for that module |
+| 7 | Audit | All assignment/approval/grant changes logged |
 
 Owner is **not** on the critical path for ordinary publishes.
 
-### 7.3 Assignment rules (maps to V2.1 operations domain)
+### 7.3 Assignment eligibility (W-A)
 
-1. Manual assignment to a profile  
-2. Team assignment (queue)  
-3. Reassignment (audited)  
-4. Priority levels (lookup)  
-5. Deadlines  
-6. Approval flags  
-7. Dependencies (`task_dependencies`)  
-8. Escalation (type + reason)  
-9. Workload visibility (open task counts)  
-10. Completion verification (`verification_status`)  
+Managers must not assign solely because a person has the right permissions. Assignment requires **all** of:
 
-Managers may only assign to assignees who already hold (or will be granted in the same controlled step) scope covering the task’s client/project/cms.
+| Check | Rule |
+| --- | --- |
+| Authorisation | Assignee holds (or receives in the same controlled step) permission + scope covering the task’s client/project/cms **module** |
+| Availability | Assignee’s current operational status allows new work (see statuses below) |
+| Workload | Manager can see open assignments, priorities, and deadlines before confirming |
+| Scope of manager | Assigner may only assign within their own authorised scopes |
+
+**Availability statuses** are **configurable lookup data**, not hard-coded per department. Seed examples (Owner/Platform Admin may rename/extend):
+
+| Status code (example) | Meaning for new assignments |
+| --- | --- |
+| `available` | Eligible for new assignments |
+| `busy` | May take limited / priority-only work per policy |
+| `on_leave` | Not eligible |
+| `absent` | Not eligible |
+| `unavailable` | Not eligible for new assignments |
+
+Operational consideration only: availability **never** grants access the employee lacks, and never bypasses client isolation or contractual denials.
+
+Managers should see, within their authorised scope:
+
+- Current availability status  
+- Count and list of open/overdue tasks  
+- Upcoming deadlines for those tasks  
+- Team workload distribution (for Ops / Dept / Team Managers)  
+
+Schema support for availability and workload views is a **proposed V2.1 amendment** (§19 PA-01, PA-02).
+
+### 7.4 Strict permission delegation (W-B)
+
+**Rule:** A manager must never grant permissions, roles, scopes, or module accesses that they do not possess **or** are not authorised to delegate.
+
+| Check | Detail |
+| --- | --- |
+| Granter authority | Granter’s effective permissions must include every permission code being granted **or** a dedicated `*.delegate` right for that family (Owner policy) |
+| Granter scope | Granter’s active scopes must cover every target scope (client, project, cms_instance, cms_module) |
+| Recipient eligibility | Recipient account kind, employment/membership status, and contractual clearance must allow the grant |
+| Sensitive / finance | Sensitive CMS modules and finance approval bundles remain Owner / Platform Admin paths unless explicitly delegated by Owner policy |
+| No self-escalation | A principal cannot approve their own grant request or widen their own privileges through a second role they hold |
+| Audit | Every grant, deny, and revoke is audited with granter, recipient, and delta |
+
+**Example (illustrative boundaries only):** A manager authorised for Treasure House **website maintenance** modules must not grant access to Treasure House **pastoral records**. Holding `cms_instance` for Treasure House is insufficient without the specific module grant and contractual clearance.
+
+Operations Managers may grant client scopes **only** when §7.4 checks pass; V2.2.0’s looser wording is superseded by this section.
 
 ---
 
@@ -215,13 +260,13 @@ Stored in `workflow_definitions` / `approvals` (V2.1). Defaults below are seeds.
 | --- | --- | --- |
 | Task completion (routine) | Team Manager | No |
 | Company CMS publish | Designated publisher / Team Manager | No (Owner for legal homepage exceptions if configured) |
-| Client CMS publish (non-sensitive) | Team Manager or Client Admin (per `management_mode`) | No |
+| Client CMS publish (non-sensitive module) | Team Manager or Client Admin (per `management_mode`) | No |
 | Client CMS sensitive module | Explicit temporary grant path | Usually Owner/Platform Admin + contract |
 | Project stage skip/return | Ops Manager | No |
 | Change request | Ops Manager + Client Admin if client-impacting | Commercial impact → Finance/Owner |
 | Quotation send | Finance or Ops per policy | Above amount → Owner |
 | Invoice issue | Finance | No |
-| Credit/refund | Distinct approver (OD-07) | Above threshold → Owner/platform_admin |
+| Credit/refund / financial exception | Distinct **user identity** (W-C) | Above threshold → Owner/platform_admin |
 | Access grant (sensitive) | Platform Admin / Owner | Yes for Owner-level roles |
 | Deletion / purge | DPO path + dual control | Yes until OD-04 defines automation |
 
@@ -232,9 +277,20 @@ Optional: `escalated`.
 
 Rules:
 
-- Requester ≠ approver for finance credits/refunds and for deletion approvals  
+- For finance credits/refunds, financial exceptions, and deletion approvals: **acting user id of approver ≠ acting user id of requester/creator** (W-C), even if both hold approval-capable roles  
+- Holding multiple roles does not allow a single user to create and approve the same financial artefact  
 - Rejection requires `decision_note`  
 - All transitions audited  
+
+### 8.3 Identity-based separation of financial duties (W-C)
+
+| Rule | Detail |
+| --- | --- |
+| Subject | Credits, refunds, write-offs, payment exceptions, and other configured financial exception types |
+| Evaluation key | `profiles.id` (authenticated user), not role membership alone |
+| Forbidden | Same user creates/requests and later approves the same artefact via a second role |
+| Allowed | Distinct user with approval permission and scope; thresholds may still escalate to Owner |
+| Extension | Same identity rule applies to grant of finance approval rights to oneself |
 
 ---
 
@@ -256,6 +312,8 @@ Stages (configurable):
 
 `backlog` → `assigned` → `in_progress` → `blocked` → `in_review` → `done` / `cancelled`.
 
+Assignment into `assigned` / `in_progress` must pass §7.3 eligibility.
+
 ### 9.3 Support
 
 `new` → `assigned` → `in_progress` → `awaiting_client` → `resolved` → `closed`.
@@ -274,7 +332,7 @@ Dunning per OD-10 R1: notify / mark past_due; **no** automatic public site/CMS r
 
 ---
 
-## 10. Client portal access
+## 10. Client portal access and CMS modules
 
 ### 10.1 What clients see (OD-18 R1)
 
@@ -284,7 +342,7 @@ Explicit allow-lists. Defaults:
 | --- | --- |
 | Own organisation profile (non-internal notes) | Other clients |
 | Own projects (status, milestones, client_visible docs) | Internal estimates, margins, staff HR |
-| Own CMS instances (status; content per management mode) | Platform settings, audit, staff directory |
+| Own CMS instances (status; content per management mode **and module**) | Platform settings, audit, staff directory |
 | Own tickets (client_visible thread) | Internal ticket notes |
 | Own contracts / invoices / subscription status | OkangGroup expenses, other clients’ finance |
 | Notifications for own events | Security admin alerts |
@@ -293,11 +351,32 @@ Explicit allow-lists. Defaults:
 
 | Mode | Client Admin | OkangGroup CMS Editor |
 | --- | --- | --- |
-| OkangGroup Managed | Request / approve as configured | Primary editors |
-| Client Managed | Primary editors | Support only if granted |
+| OkangGroup Managed | Request / approve as configured | Primary editors (module-scoped) |
+| Client Managed | Primary editors (module-scoped) | Support only if granted |
 | Hybrid | Per-module ACL | Per-module ACL |
 
-External CMS still enforces its own AuthZ (V2.1 §6.5 → V2.3 detail).
+### 10.3 Module-specific CMS permissions (W-D)
+
+Granting access to a client CMS **instance** must **not** automatically grant every module inside it. Each module has its own view/edit/publish/no-access posture.
+
+Illustrative boundaries (**not** grants to named staff):
+
+| Client CMS | Module | Possible access |
+| --- | --- | --- |
+| Treasure House | Website content | Edit / Publish |
+| Treasure House | Events | View / Edit |
+| Treasure House | Finance | No access |
+| Treasure House | Pastoral records | No access |
+| NiiNai | Public website | Edit |
+| NiiNai | Guest bookings | No access |
+| NiiNai | Financial transactions | No access |
+
+| Layer | Responsibility |
+| --- | --- |
+| OkangGroup platform (V2.2) | Records intended module grants, scopes, and contractual flags; blocks unauthorised grant attempts (W-B) |
+| External CMS (V2.3) | Enforces module AuthZ at runtime in each client system |
+
+Sensitive modules continue to require temporary_access + contractual clearance (OD-08 A). Owner cannot override a client contractual denial.
 
 ---
 
@@ -307,9 +386,10 @@ External CMS still enforces its own AuthZ (V2.1 §6.5 → V2.3 detail).
 
 - Define/alter roles and non-forbidden permission mappings (OD-05 A)  
 - Create departments/teams; invite Platform Admins  
-- Register clients; allocate CMS instances  
+- Register clients; allocate CMS instances and module catalogues  
+- Configure availability status lookups and assignment policies  
 - Set commercial policies and service plans  
-- Approve top-tier finance exceptions  
+- Approve top-tier finance exceptions (as a distinct user from the requester)  
 - Place legal holds; approve retention policy versions **after OD-04**  
 - Issue temporary sensitive access (still contractual)  
 
@@ -320,26 +400,34 @@ External CMS still enforces its own AuthZ (V2.1 §6.5 → V2.3 detail).
 - Silently rewrite historical invoices/tax snapshots  
 - Auto-kill client public websites for billing (business rule A)  
 - Access external sensitive CMS modules without explicit grant + contract path  
+- Approve their own financial exception request when they were the creator/requester (W-C; use a distinct authorised approver or documented break-glass with dual control if ever required by policy)
 
 All Owner actions are audited like any privileged actor.
 
 ---
 
-## 12. Invitation and onboarding workflows
+## 12. Invitation and onboarding workflows (W-E)
 
 ### 12.1 Staff (OD-12 A, OD-15 R1)
 
-1. Platform Admin/Owner creates `invitations` (staff) with initial role ids  
+1. Platform Admin/Owner creates `invitations` (staff) with the **exact** approved role ids, scopes, and module grants — no implicit platform-wide privileges  
 2. Email via verified `@okanggroup.com` when configured  
-3. Accept → set password → MFA enrolment if `mfa_required`  
-4. `role_grants` + `staff_memberships` activated  
+3. Accept → set password → **MFA enrolment/completion required before privileged functions** if any approved grant is privileged or `mfa_required`  
+4. On activation, system materialises **only** the invitation’s approved `role_grants` / scopes / memberships — acceptance must not widen privileges  
 5. Audit + `account_status_events`  
+
+| Guard | Detail |
+| --- | --- |
+| No excess on accept | Invitation payload is the sole source of day-0 privileges |
+| Stale invitation | Expired or revoked invitations cannot activate |
+| Privileged MFA | Owner, Platform Admin, Finance, sensitive holders: MFA before protected UI/API |
+| Manager invites | If managers may invite under future policy, §7.4 still caps what the invitation may contain |
 
 ### 12.2 Client users
 
-1. Client Admin or OkangGroup staff with `clients.invite` creates invitation with `client_id`  
-2. Accept → membership + scoped grants  
-3. Client Admin cannot invite staff or grant other clients  
+1. Client Admin or OkangGroup staff with `clients.invite` creates invitation with `client_id` and explicit membership/role/module set  
+2. Accept → membership + scoped grants **exactly as approved**  
+3. Client Admin cannot invite staff, grant other clients, or escalate modules beyond their own authority  
 
 ---
 
@@ -348,10 +436,12 @@ All Owner actions are audited like any privileged actor.
 | Situation | Path |
 | --- | --- |
 | Blocked task past SLA | Team Manager → Ops Manager |
+| Assignee unavailable / on leave | Reassign within scope using §7.3; escalate if no eligible staff |
 | Client dispute on scope | Ops Manager → Owner (commercial) |
 | Suspected security incident | Any staff → Platform Admin/Owner; `security_incidents` |
-| Need sensitive CMS access | Temporary access request → approver → time-boxed grant |
+| Need sensitive CMS module access | Temporary access request → approver → time-boxed **module** grant |
 | Billing past_due | Finance notifies; ops may propose management suspension — **Owner/authorised approver** before acting; site stays up |
+| Attempted privilege escalation | Deny + audit; Platform Admin/Owner review |
 
 ---
 
@@ -361,13 +451,13 @@ Logical menus (routes later; OD-14 A hosting). Show only if permission exists.
 
 | Menu | Owner / Platform Admin | Ops / Managers | Specialist staff | Client |
 | --- | --- | --- | --- | --- |
-| Dashboard | Yes | Yes (scoped) | Yes (personal) | Yes (client) |
+| Dashboard (W-F) | Yes | Yes (scoped) | Yes (personal) | Yes (client) |
 | OkangGroup CMS | Yes | If granted | If granted | No |
 | Clients | Yes | Scoped | Scoped | Own only |
 | Projects | Yes | Scoped | Assigned | Allow-list |
-| Client CMS | Yes | Scoped | Instance | Own |
+| Client CMS | Yes | Scoped modules | Granted modules | Own modules |
 | Operations (tasks) | Yes | Yes | Assigned | Requests |
-| People | Yes | Limited | Limited | No |
+| People / availability | Yes | Limited scoped | Own status | No |
 | Finance | Yes / Finance | No | No | Own invoices |
 | Support | Yes | Scoped | If agent | Own tickets |
 | Monitoring | Yes | Limited | No | Own if granted |
@@ -376,7 +466,36 @@ Logical menus (routes later; OD-14 A hosting). Show only if permission exists.
 
 ---
 
-## 15. Open items for V2.2 (do not invent)
+## 15. Management dashboard requirements (W-F)
+
+Managers need a single operational view so delegation is usable day to day. **Every widget is filtered by the viewer’s authorised scopes** (client / department / team / project / cms module). Cross-tenant leakage is forbidden.
+
+### 15.1 Required widgets (within scope)
+
+| Widget | Purpose |
+| --- | --- |
+| Assigned tasks | Open work for the manager’s teams/clients |
+| Outstanding approvals | Items waiting on the manager or their delegates |
+| Overdue work | Past-due tasks and stalled approvals |
+| Workload distribution | Open task counts / deadlines by assignee (respects availability visibility) |
+| Escalations | Escalated items and SLA breaches |
+| Availability board | Configurable statuses for staff in scope (W-A) |
+
+### 15.2 Dashboard rules
+
+| Rule | Detail |
+| --- | --- |
+| Scope filter | Default and hard filter = viewer’s effective scopes |
+| No privilege boost | Dashboard links must not open resources the viewer cannot access |
+| Personal vs manager | Specialists see personal queue; managers see supervised scope |
+| Client dashboards | Client Admin/User see only own-organisation widgets (OD-18) |
+| Audit | Sensitive drill-downs (e.g. finance exceptions) remain permission-gated |
+
+UI implementation is out of scope until coding is authorised; this section is the design contract.
+
+---
+
+## 16. Open items for V2.2 (do not invent)
 
 | ID | Topic | Notes |
 | --- | --- | --- |
@@ -386,33 +505,73 @@ Logical menus (routes later; OD-14 A hosting). Show only if permission exists.
 | W2-04 | Which company CMS pages need Owner publish | Optional tightening |
 | W2-05 | Client Admin invite quota / verification | Abuse control |
 | W2-06 | Mapping of Hybrid CMS modules per pilot client | V2.3 + OD-13 |
+| W2-07 | Availability status catalogue and busy-policy | Configurable seeds; Owner names |
+| W2-08 | Which permission families allow manager `*.delegate` | Owner policy for W-B |
+| W2-09 | Financial exception types covered by W-C | Beyond credits/refunds |
+| W2-10 | MFA grace / recovery for privileged invites | Security policy |
 
 ---
 
-## 16. Acceptance criteria for a future V2.2 freeze
+## 17. Acceptance criteria for a future V2.2 freeze
 
-1. Owner reviews and accepts or amends matrices in §6–§8.  
+1. Owner reviews and accepts or amends matrices in §6–§8 and §10.3 / §15.  
 2. W2-01 permission catalogue agreed.  
-3. V2.1.8A remains baseline (or a later Owner-frozen V2.1).  
-4. No coding until explicit authorisation after relevant freezes.  
+3. Proposed V2.1 amendments in §19 accepted, deferred, or rejected explicitly.  
+4. V2.1.8A remains baseline (or a later Owner-frozen V2.1).  
+5. No coding until explicit authorisation after relevant freezes.  
 
 ---
 
-## 17. Explicit non-goals of V2.2.0
+## 18. Explicit non-goals of V2.2.1
 
-- Modifying V2.1.8A schema text  
+- Modifying V2.1.8A schema text in place  
 - Freezing V2.1 or V2.2  
 - SQL migrations, RLS SQL, application UI  
-- CMS wire protocols (V2.3)  
+- CMS wire protocols and external AuthZ enforcement (V2.3)  
 - Closing OD-04  
 - Supabase project changes  
+- Merges to `main` or deployments  
 
 ---
 
-## 18. Document control
+## 19. Proposed V2.1 amendments (not applied to V2.1.8A)
+
+These are **design requirements from V2.2.1**. They must not be treated as part of the accepted V2.1.8A baseline until Owner authorises a V2.1 revision.
+
+| ID | Proposal | Driven by | Notes |
+| --- | --- | --- | --- |
+| PA-01 | Configurable staff availability status (lookup + current status per staff profile/membership) | W-A | Statuses data-driven, not hard-coded workflows |
+| PA-02 | Workload visibility support (queries/views or denormalised counters over open tasks/deadlines by assignee within scope) | W-A, W-F | May be view-only initially |
+| PA-03 | Explicit `cms_module` (or equivalent) scope / grant artefact linked to `cms_instances` | W-D | Instance grant ≠ all modules |
+| PA-04 | Delegation metadata: whether a grant may be re-delegated; optional `delegate` permission flags | W-B | Enforce granter ⊆ authority |
+| PA-05 | Approval SoD keyed by requester/creator `profile_id` vs approver `profile_id` for finance exceptions | W-C | Identity, not role-only |
+| PA-06 | Invitation payload must store exact approved roles/scopes/modules; activation applies only that set | W-E | No implicit widening |
+| PA-07 | Privileged-session gate: MFA satisfied before sensitive permission use | W-E / OD-11 | Align with existing MFA intent |
+
+**V2.1.8A file remains unchanged** until a separate, authorised V2.1 amendment cycle.
+
+---
+
+## 20. Unresolved decisions
+
+| ID | Decision needed | Impact |
+| --- | --- | --- |
+| UD-01 | Final availability status codes and whether `busy` allows any new assignments | W-A assignment UX |
+| UD-02 | Which manager roles may invite staff at all (today: Platform Admin / Owner only) | W-E |
+| UD-03 | Exact `*.delegate` permission families Ops Managers may use | W-B |
+| UD-04 | Full list of financial artefact types under identity SoD | W-C |
+| UD-05 | Pilot module catalogues for Treasure House / NiiNai (illustrative only today) | W-D → V2.3 |
+| UD-06 | Dashboard widget priority / MVP cut for first coded release | W-F |
+| UD-07 | OD-04 retention (external to V2.2) | Freeze readiness |
+| UD-08 | Supabase MCP account alignment to `prbgsnxpwyepdggdysnt` | Implementation readiness |
+
+---
+
+## 21. Document control
 
 | Version | Date | Notes |
 | --- | --- | --- |
 | 2.2.0 | 2026-10-11 | Initial Workflows and Permissions design; separate from V2.1.8A |
+| 2.2.1 | 2026-10-11 | W-A availability/workload; W-B strict delegation; W-C identity finance SoD; W-D module CMS permissions; W-E secure invites + MFA; W-F management dashboard; §19 proposed V2.1 amendments |
 
-**End of OkangGroup Workflows and Permissions Design V2.2.0 — under review. Does not modify V2.1.8A. Does not authorise coding. CODING HOLD.**
+**End of OkangGroup Workflows and Permissions Design V2.2.1 — under review. Does not modify V2.1.8A. Does not freeze V2.2. Does not authorise coding. CODING HOLD.**
