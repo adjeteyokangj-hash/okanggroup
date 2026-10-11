@@ -1,0 +1,1541 @@
+# OkangGroup Database Architecture V2.1
+
+| Field | Value |
+| --- | --- |
+| Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
+| Parent | Platform Architecture V2.0 — Proposed Structure |
+| Supabase project | `okanggroup-platform` |
+| Project ID | `prbgsnxpwyepdggdysnt` |
+| Region | London (`eu-west-2`) |
+| Plan | Free |
+| Owner account | `okanggroup@gmail.com` |
+| Forbidden project | `vzgfvzzbgrlxvixejmdt` (not the platform database) |
+| Deliverable type | PostgreSQL design contract (not applied SQL) |
+| Public website | Existing Vite site preserved; no framework rewrite required by this contract |
+| Phase-1 decisions recorded | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (direction accepted; full schema still under review) |
+| Architecture frozen | **No** |
+
+---
+
+## 0. Verification log (read-only)
+
+| Check | Result |
+| --- | --- |
+| Target project ID | `prbgsnxpwyepdggdysnt` |
+| MCP re-auth attempted | Yes (repeated; latest 2026-10-11) |
+| Projects visible to current MCP session | Only `vzgfvzzbgrlxvixejmdt` (“adjeteyokangj-hash's Project”, `eu-west-1`) |
+| `get_project(prbgsnxpwyepdggdysnt)` | Permission denied |
+| `list_tables` / `list_migrations` on target | Not available (permission denied) |
+| Mutations performed | **None** |
+| New projects created | **None** |
+| Switched to old database | **No** — target remains `prbgsnxpwyepdggdysnt` only |
+
+**Owner action required:** In the Supabase MCP OAuth browser window, sign out of any personal Supabase/Google session first, then sign in as `okanggroup@gmail.com` and approve Cursor. Re-run read-only verification afterward. Do not create another project. Do not use `vzgfvzzbgrlxvixejmdt`.
+
+---
+
+## 1. Preamble and principles
+
+### 1.1 Purpose
+
+This document is the PostgreSQL implementation contract for OkangGroup’s central business operations platform. It defines tables, relationships, constraints, indexes, tenant isolation, RLS permission intent, CMS integration boundaries, workflow state machines, Free-tier considerations, and a dependency-ordered migration plan.
+
+Cursor must not invent missing business or security rules. Items that require Owner decision appear in [§14 Open Decisions](#14-open-decisions).
+
+### 1.2 Three principles (from V2.0)
+
+1. OkangGroup operates from one central platform database.
+2. Client CMS systems remain individually customised and isolated; the platform holds a registry and connection contracts, not a single generic CMS schema forced on every client.
+3. Cursor implements only approved specifications. No migrations, application code, or production deployment until Owner authorises a later phase.
+
+### 1.3 Vite coexistence
+
+The existing public site (`index.html`, `css/styles.css`, `js/main.js`, Vite build → Vercel) remains the marketing surface. This schema supports:
+
+- Company CMS content that can eventually drive public pages without replacing the current design system.
+- Secure platform routes (`/login`, `/dashboard`, `/admin/*`, `/cms/*`) introduced later as an adjacent application surface on the same domain.
+
+This contract does **not** require migrating the public site to React/Next.js. Per **OD-14 A**, the secure administration application is introduced separately via same-domain routing, and the public site must remain available even if that administration application is unavailable.
+
+### 1.4 What must not enter the core platform database by default
+
+- Client pastoral / membership pastoral records (e.g. Treasure House sensitive modules).
+- Client operational finance ledgers belonging to the client’s own systems (e.g. NiiNai internal transactions).
+- Arbitrary PII scraped from client apps without a contractual processing basis.
+
+Those remain in the client CMS / application backends. Platform tables may store only authorised operational metadata (connection health, assigned staff, support tickets linked by ID).
+
+### 1.5 Live payments
+
+No payment-provider integration tables beyond placeholder provider references until [OD-01](#14-open-decisions). Commercial modules record quotations, contracts, invoices, subscriptions, and manually recorded payments only.
+
+---
+
+## 2. Domain map
+
+### 2.1 Logical domains (15)
+
+| # | Domain | Core tables |
+| --- | --- | --- |
+| 1 | Identity | `profiles`, `invitations`, `account_status_events` |
+| 2 | Organisation | `departments`, `teams`, `staff_memberships`, `job_titles` |
+| 3 | Permissions | `roles`, `permissions`, `role_permissions`, `role_grants`, `access_scopes`, `temporary_access` |
+| 4 | Clients | `clients`, `client_contacts`, `client_memberships`, `client_services` |
+| 5 | Projects | `projects`, `project_deliverables`, `milestones`, `change_requests`, `project_documents` |
+| 6 | CMS Registry | `cms_instances`, `cms_modules`, `cms_connections`, `cms_migrations` |
+| 7 | Company CMS | `cms_pages`, `cms_sections`, `cms_media_assets`, `cms_revisions`, `cms_navigation`, `cms_seo`, `contact_enquiries` |
+| 8 | Operations | `tasks`, `task_assignments`, `approvals`, `task_dependencies` |
+| 9 | Commercial | `service_plans`, `quotations`, `contracts`, `subscriptions`, `invoices`, `invoice_lines` |
+| 10 | Payments | `payment_records`, `credit_notes`, `refunds`, `expenses`, `fx_rates` |
+| 11 | Support | `tickets`, `ticket_messages`, `incidents` |
+| 12 | Monitoring | `monitored_services`, `health_checks`, `alerts` |
+| 13 | Notifications | `notifications`, `notification_preferences`, `delivery_attempts` |
+| 14 | Security | `audit_events`, `access_reviews`, `security_incidents` |
+| 15 | Configuration | `settings`, `feature_flags`, `workflow_definitions`, `lookup_values` |
+
+### 2.2 Cross-domain relationship overview
+
+```text
+auth.users 1—1 profiles
+profiles —< role_grants >— roles —< role_permissions >— permissions
+profiles —< staff_memberships >— departments / teams
+profiles —< client_memberships >— clients
+clients —< projects —< deliverables / milestones / change_requests
+clients —< cms_instances —< cms_modules / cms_connections
+clients —< contracts / subscriptions / invoices
+clients —< tickets / monitored_services
+tasks / approvals link profiles, clients, projects, cms_instances
+audit_events append-only, references actor profile + resource
+workflow_definitions configure project / task / ticket / publish / subscription machines
+company CMS tables are OkangGroup-tenant (client_id NULL, owner_org flag)
+```
+
+### 2.3 Schema placement
+
+| Schema | Use |
+| --- | --- |
+| `public` | Application tables listed below (RLS enabled on every table) |
+| `auth` | Supabase-managed users/sessions (do not redefine) |
+| `storage` | Supabase Storage; buckets referenced by path conventions |
+| `private` (optional later) | `security definer` helper functions only — not exposed via Data API |
+
+Per recorded decision **OD-02 A**, helper SQL resides in schema `private` (not exposed via the Data API). See [§14.3](#143-recorded-architecture-decisions-direction-accepted-schema-not-frozen).
+
+---
+
+## 3. Shared conventions
+
+### 3.1 Identifiers and timestamps
+
+| Convention | Rule |
+| --- | --- |
+| Primary keys | `uuid` DEFAULT `gen_random_uuid()` |
+| Foreign keys | Explicit `ON DELETE` policy per relationship (see domain sections) |
+| Created | `created_at timestamptz NOT NULL DEFAULT now()` |
+| Updated | `updated_at timestamptz NOT NULL DEFAULT now()` maintained by trigger |
+| Soft lifecycle | Prefer `status` / `archived_at` over hard delete for business entities |
+| Hard delete | Allowed for draft/ephemeral rows only (e.g. unused invitation before accept) |
+
+### 3.2 Actor columns
+
+Where a human action is recorded:
+
+- `created_by uuid NULL REFERENCES profiles(id)`
+- `updated_by uuid NULL REFERENCES profiles(id)`
+
+System jobs set these NULL and set `source = 'system'` where applicable.
+
+### 3.3 Tenant boundary
+
+| Record class | Tenant key |
+| --- | --- |
+| Client-owned / client-scoped | `client_id uuid NOT NULL REFERENCES clients(id)` |
+| OkangGroup company CMS / internal-only | `client_id` NULL + `is_internal boolean NOT NULL DEFAULT false` (internal = true) |
+| Platform-wide configuration | No `client_id`; protected by platform admin permissions |
+
+Every client-scoped table must include `client_id` (denormalised where needed for RLS performance) even if also linked via `project_id` / `cms_instance_id`.
+
+### 3.4 Money and currency
+
+| Rule | Detail |
+| --- | --- |
+| Amount storage | `numeric(18,2)` for major-unit money fields |
+| Currency | ISO 4217 `char(3)` — initial support `GBP`, `GHS` |
+| Historical integrity | Invoice/payment rows store `currency_code` and amounts as issued; price-list changes must not rewrite historical rows |
+| FX | Optional `fx_rate numeric(18,8)` + `fx_rate_as_of date` + `fx_base_currency` when converting for reporting |
+| Rounding | Documented in Open Decisions ([OD-03](#14-open-decisions)) |
+
+### 3.5 Enumerations
+
+Prefer `lookup_values` / `workflow_definitions` for Owner-configurable statuses (departments are never hard-coded). Use PostgreSQL `text` + `CHECK` only for closed technical enums that must not be casually renamed (e.g. `audit_events.severity`).
+
+Configurable via Configuration Studio (domain 15):
+
+- Department names, team names, job titles
+- Client types / account statuses
+- Project categories and stages
+- Task priorities and approval types
+- Support statuses and priorities
+- Subscription package codes (via `service_plans`)
+- Notification categories (except critical security, which is forced)
+
+### 3.6 Audit coverage
+
+Mutating business tables emit `audit_events` via trigger or application service. `audit_events` is append-only: no UPDATE/DELETE policies for ordinary roles; service role only for retention purge after Owner-approved policy ([OD-04](#14-open-decisions)).
+
+### 3.7 Indexing baseline
+
+- Every FK column indexed unless the table is tiny and write-heavy with Owner exception.
+- Composite indexes for RLS hot paths: `(client_id, status)`, `(assignee_profile_id, status)`, `(cms_instance_id, status)`.
+- Unique natural keys where listed (slug, invoice number, etc.).
+
+### 3.8 Storage path conventions (design)
+
+| Bucket (proposed) | Contents |
+| --- | --- |
+| `company-media` | OkangGroup website media |
+| `client-documents` | Contracts, project files (path prefix `client/{client_id}/...`) |
+| `support-attachments` | Ticket files |
+| `cms-migration-artefacts` | Migration assessment exports (non-sensitive metadata preferred) |
+
+Bucket policies are application/Storage RLS work in a later phase; paths must embed `client_id` for isolation.
+
+---
+
+## 4. Domain contracts
+
+Column lists are the approved design contract. Types are PostgreSQL. `…` means standard `created_at` / `updated_at` / `created_by` / `updated_by` unless noted.
+
+---
+
+### Domain 1 — Identity
+
+#### `profiles`
+
+Extends `auth.users` 1:1. Authorisation data lives here / in grants — **never** in `user_metadata` for RLS decisions.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK, FK → `auth.users(id)` ON DELETE CASCADE |
+| `email` | `citext` | NOT NULL, UNIQUE |
+| `full_name` | `text` | NOT NULL |
+| `display_name` | `text` | NULL |
+| `phone` | `text` | NULL |
+| `avatar_url` | `text` | NULL |
+| `account_kind` | `text` | NOT NULL CHECK IN (`staff`, `client_user`, `system`) |
+| `account_status` | `text` | NOT NULL DEFAULT `invited` — values via lookup: `invited`, `active`, `suspended`, `offboarded` |
+| `mfa_required` | `boolean` | NOT NULL DEFAULT false |
+| `last_login_at` | `timestamptz` | NULL |
+| `offboarded_at` | `timestamptz` | NULL |
+| … | | |
+
+Indexes: `(account_kind, account_status)`, `(email)`.
+
+#### `invitations`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `email` | `citext` | NOT NULL |
+| `account_kind` | `text` | NOT NULL CHECK IN (`staff`, `client_user`) |
+| `client_id` | `uuid` | NULL FK → `clients` ON DELETE CASCADE (required if client_user) |
+| `invited_by` | `uuid` | NOT NULL FK → `profiles` |
+| `token_hash` | `text` | NOT NULL UNIQUE |
+| `role_ids` | `uuid[]` | NULL — initial roles to grant on accept |
+| `expires_at` | `timestamptz` | NOT NULL |
+| `accepted_at` | `timestamptz` | NULL |
+| `revoked_at` | `timestamptz` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `pending` |
+| … | | |
+
+CHECK: client invitations require `client_id`; staff invitations forbid `client_id` or allow NULL only.
+
+#### `account_status_events`
+
+Append-ish history of status changes.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `from_status` | `text` | NULL |
+| `to_status` | `text` | NOT NULL |
+| `reason` | `text` | NULL |
+| `changed_by` | `uuid` | NULL FK → `profiles` |
+| `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+No `updated_at`. No UPDATE/DELETE for ordinary roles.
+
+---
+
+### Domain 2 — Organisation
+
+Departments and teams are **data**, not code constants.
+
+#### `departments`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `code` | `text` | NOT NULL UNIQUE |
+| `name` | `text` | NOT NULL |
+| `description` | `text` | NULL |
+| `parent_department_id` | `uuid` | NULL FK → `departments` ON DELETE SET NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` (`active`, `inactive`, `merged`) |
+| `merged_into_id` | `uuid` | NULL FK → `departments` |
+| … | | |
+
+#### `teams`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `department_id` | `uuid` | NOT NULL FK → `departments` ON DELETE RESTRICT |
+| `code` | `text` | NOT NULL |
+| `name` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+UNIQUE (`department_id`, `code`).
+
+#### `job_titles`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `title` | `text` | NOT NULL UNIQUE |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+#### `staff_memberships`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `department_id` | `uuid` | NULL FK → `departments` |
+| `team_id` | `uuid` | NULL FK → `teams` |
+| `job_title_id` | `uuid` | NULL FK → `job_titles` |
+| `is_primary` | `boolean` | NOT NULL DEFAULT false |
+| `reports_to_profile_id` | `uuid` | NULL FK → `profiles` |
+| `started_at` | `date` | NULL |
+| `ended_at` | `date` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+CHECK: if `team_id` set, team’s department matches `department_id`. Multiple active memberships allowed. Reporting hierarchy is organisational only — **not** an automatic privilege ladder.
+
+---
+
+### Domain 3 — Permissions (RBAC + scope)
+
+#### `permissions`
+
+Stable permission catalogue (seeded by migration; extendable via Configuration Studio only for non-security-critical codes — [OD-05](#14-open-decisions)).
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `code` | `text` | NOT NULL UNIQUE (e.g. `clients.read`, `finance.invoice.issue`) |
+| `description` | `text` | NOT NULL |
+| `category` | `text` | NOT NULL |
+| `is_sensitive` | `boolean` | NOT NULL DEFAULT false |
+| `allows_scope` | `boolean` | NOT NULL DEFAULT true |
+| … | | |
+
+#### `roles`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `code` | `text` | NOT NULL UNIQUE |
+| `name` | `text` | NOT NULL |
+| `description` | `text` | NULL |
+| `is_system` | `boolean` | NOT NULL DEFAULT false |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+Proposed system role codes (names configurable; codes stable):
+
+`owner`, `platform_admin`, `operations_manager`, `department_manager`, `team_manager`, `staff`, `finance_user`, `support_agent`, `cms_editor`, `client_admin`, `client_user`
+
+#### `role_permissions`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `role_id` | `uuid` | FK → `roles` ON DELETE CASCADE |
+| `permission_id` | `uuid` | FK → `permissions` ON DELETE CASCADE |
+| PK | | (`role_id`, `permission_id`) |
+
+#### `access_scopes`
+
+Defines the resource boundary attached to a grant.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `scope_type` | `text` | NOT NULL CHECK IN (`platform`, `department`, `team`, `client`, `project`, `cms_instance`) |
+| `department_id` | `uuid` | NULL |
+| `team_id` | `uuid` | NULL |
+| `client_id` | `uuid` | NULL |
+| `project_id` | `uuid` | NULL |
+| `cms_instance_id` | `uuid` | NULL |
+| … | | |
+
+CHECK: exactly the columns required by `scope_type` are non-null.
+
+#### `role_grants`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `role_id` | `uuid` | NOT NULL FK → `roles` ON DELETE RESTRICT |
+| `access_scope_id` | `uuid` | NOT NULL FK → `access_scopes` |
+| `granted_by` | `uuid` | NULL FK → `profiles` |
+| `starts_at` | `timestamptz` | NOT NULL DEFAULT now() |
+| `ends_at` | `timestamptz` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+UNIQUE active grant: (`profile_id`, `role_id`, `access_scope_id`) WHERE `status = 'active'` (partial unique index).
+
+#### `temporary_access`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` |
+| `permission_id` | `uuid` | NULL FK → `permissions` |
+| `role_id` | `uuid` | NULL FK → `roles` |
+| `access_scope_id` | `uuid` | NOT NULL FK → `access_scopes` |
+| `reason` | `text` | NOT NULL |
+| `approved_by` | `uuid` | NULL FK → `profiles` |
+| `starts_at` / `ends_at` | `timestamptz` | NOT NULL |
+| `revoked_at` | `timestamptz` | NULL |
+| … | | |
+
+CHECK: at least one of `permission_id` / `role_id`.
+
+**Authorisation rule:** Effective access = active `role_grants` (+ unexpired `temporary_access`) whose scope covers the resource, AND permission codes required by the operation. Org reporting lines do not grant permissions by themselves.
+
+---
+
+### Domain 4 — Clients
+
+#### `clients`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_code` | `text` | NOT NULL UNIQUE |
+| `legal_name` | `text` | NOT NULL |
+| `trading_name` | `text` | NULL |
+| `client_type` | `text` | NOT NULL (lookup) |
+| `country_code` | `char(2)` | NOT NULL |
+| `primary_currency` | `char(3)` | NOT NULL DEFAULT `GBP` |
+| `account_status` | `text` | NOT NULL DEFAULT `prospect` |
+| `billing_email` | `citext` | NULL |
+| `notes_internal` | `text` | NULL (staff-only) |
+| `archived_at` | `timestamptz` | NULL |
+| … | | |
+
+#### `client_contacts`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL FK → `clients` ON DELETE CASCADE |
+| `full_name` | `text` | NOT NULL |
+| `email` | `citext` | NULL |
+| `phone` | `text` | NULL |
+| `job_title` | `text` | NULL |
+| `is_primary` | `boolean` | NOT NULL DEFAULT false |
+| `portal_profile_id` | `uuid` | NULL FK → `profiles` |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+#### `client_memberships`
+
+Links portal users to a client with a portal role grant scope.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL FK → `clients` ON DELETE CASCADE |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `membership_role` | `text` | NOT NULL (e.g. `client_admin`, `client_user`) |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+UNIQUE (`client_id`, `profile_id`).
+
+#### `client_services`
+
+Catalogue of services engaged (links to commercial plans optionally).
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL FK → `clients` ON DELETE CASCADE |
+| `service_plan_id` | `uuid` | NULL FK → `service_plans` |
+| `service_name` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| `started_on` / `ended_on` | `date` | NULL |
+| … | | |
+
+**Deletion:** Clients are soft-archived (`account_status = archived`, `archived_at`). Hard delete forbidden once contracts/invoices exist (RESTRICT via FKs).
+
+---
+
+### Domain 5 — Projects
+
+#### `projects`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL FK → `clients` ON DELETE RESTRICT |
+| `code` | `text` | NOT NULL |
+| `name` | `text` | NOT NULL |
+| `category` | `text` | NOT NULL (lookup / configurable) |
+| `stage` | `text` | NOT NULL (workflow-driven) |
+| `status` | `text` | NOT NULL DEFAULT `open` (`open`, `on_hold`, `cancelled`, `closed`) |
+| `contract_id` | `uuid` | NULL FK → `contracts` |
+| `budget_amount` | `numeric(18,2)` | NULL |
+| `budget_currency` | `char(3)` | NULL |
+| `starts_on` / `target_end_on` | `date` | NULL |
+| `summary` | `text` | NULL |
+| … | | |
+
+UNIQUE (`client_id`, `code`).
+
+Lifecycle stages (default seed; configurable):  
+`enquiry` → `proposal` → `approved` → `planning` → `development` → `testing` → `client_review` → `delivered` → `maintenance`  
+Machine must allow skip, return, cancel ([§8](#8-workflow-state-machines)).
+
+#### `project_deliverables`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `project_id` | `uuid` | NOT NULL FK → `projects` ON DELETE CASCADE |
+| `client_id` | `uuid` | NOT NULL FK → `clients` |
+| `name` | `text` | NOT NULL |
+| `deliverable_type` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL |
+| … | | |
+
+#### `milestones`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `project_id` | `uuid` | NOT NULL FK → `projects` ON DELETE CASCADE |
+| `client_id` | `uuid` | NOT NULL |
+| `name` | `text` | NOT NULL |
+| `due_on` | `date` | NULL |
+| `completed_at` | `timestamptz` | NULL |
+| `status` | `text` | NOT NULL |
+| `sort_order` | `int` | NOT NULL DEFAULT 0 |
+| … | | |
+
+#### `change_requests`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `project_id` | `uuid` | NOT NULL FK → `projects` |
+| `client_id` | `uuid` | NOT NULL |
+| `title` | `text` | NOT NULL |
+| `description` | `text` | NOT NULL |
+| `impact_summary` | `text` | NULL |
+| `status` | `text` | NOT NULL |
+| `requested_by_profile_id` | `uuid` | NULL |
+| `approved_by_profile_id` | `uuid` | NULL |
+| … | | |
+
+#### `project_documents`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `project_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NOT NULL |
+| `title` | `text` | NOT NULL |
+| `storage_path` | `text` | NOT NULL |
+| `doc_type` | `text` | NOT NULL |
+| `visibility` | `text` | NOT NULL CHECK IN (`internal`, `client_visible`) |
+| … | | |
+
+---
+
+### Domain 6 — CMS Registry (client CMS control centre)
+
+Platform registry only. Per-client content schemas live in the client CMS backend.
+
+#### `cms_instances`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL FK → `clients` ON DELETE RESTRICT |
+| `slug` | `text` | NOT NULL UNIQUE (e.g. `treasure-house`) |
+| `display_name` | `text` | NOT NULL |
+| `cms_kind` | `text` | NOT NULL (e.g. `church_website`, `courier_website`, `custom`) |
+| `management_mode` | `text` | NOT NULL CHECK IN (`okanggroup_managed`, `client_managed`, `hybrid`) |
+| `status` | `text` | NOT NULL DEFAULT `pending` (`pending`, `connected`, `disconnected`, `migrating`, `retired`) |
+| `primary_domain` | `text` | NULL |
+| `admin_path` | `text` | NULL (e.g. `/cms/treasure-house`) |
+| `data_residency_note` | `text` | NULL |
+| `excludes_sensitive_modules` | `boolean` | NOT NULL DEFAULT true |
+| … | | |
+
+#### `cms_modules`
+
+Registered capability modules for an instance (feature map, not content).
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `cms_instance_id` | `uuid` | NOT NULL FK → `cms_instances` ON DELETE CASCADE |
+| `client_id` | `uuid` | NOT NULL |
+| `module_code` | `text` | NOT NULL |
+| `module_name` | `text` | NOT NULL |
+| `is_sensitive` | `boolean` | NOT NULL DEFAULT false |
+| `hosted_in` | `text` | NOT NULL CHECK IN (`platform_registry_only`, `external_cms`, `company_cms`) |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+UNIQUE (`cms_instance_id`, `module_code`). Sensitive modules marked `is_sensitive = true` must not be migrated into platform content tables.
+
+#### `cms_connections`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `cms_instance_id` | `uuid` | NOT NULL FK → `cms_instances` ON DELETE CASCADE |
+| `client_id` | `uuid` | NOT NULL |
+| `base_url` | `text` | NOT NULL |
+| `auth_method` | `text` | NOT NULL CHECK IN (`service_jwt`, `m2m_oauth`, `signed_webhook`, `manual`) |
+| `credential_ref` | `text` | NULL — reference to secret store / vault; **never** store raw secrets in this row |
+| `last_healthy_at` | `timestamptz` | NULL |
+| `last_error` | `text` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `unknown` |
+| … | | |
+
+#### `cms_migrations`
+
+Migration framework records for existing CMS systems.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `cms_instance_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NOT NULL |
+| `phase` | `text` | NOT NULL (`discovery`, `compatibility`, `feature_mapping`, `auth_migration`, `api_integration`, `content_verification`, `permission_testing`, `cutover`, `rollback`, `complete`) |
+| `assessment_notes` | `text` | NULL |
+| `risk_level` | `text` | NULL |
+| `cutover_at` | `timestamptz` | NULL |
+| `rolled_back_at` | `timestamptz` | NULL |
+| `status` | `text` | NOT NULL |
+| … | | |
+
+**Ownership:** Client retains data ownership regardless of `management_mode`.
+
+---
+
+### Domain 7 — Company CMS (OkangGroup website)
+
+Internal CMS for `okanggroup.com`. Not a multi-tenant client content store.
+
+#### `cms_pages`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `slug` | `text` | NOT NULL UNIQUE |
+| `title` | `text` | NOT NULL |
+| `page_type` | `text` | NOT NULL (home, about, services, products, client_work, contact, custom) |
+| `status` | `text` | NOT NULL DEFAULT `draft` (`draft`, `in_review`, `scheduled`, `published`, `archived`) |
+| `published_at` | `timestamptz` | NULL |
+| `published_by` | `uuid` | NULL |
+| … | | |
+
+#### `cms_sections`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `page_id` | `uuid` | NOT NULL FK → `cms_pages` ON DELETE CASCADE |
+| `section_key` | `text` | NOT NULL |
+| `sort_order` | `int` | NOT NULL DEFAULT 0 |
+| `content_json` | `jsonb` | NOT NULL DEFAULT `{}` |
+| `status` | `text` | NOT NULL DEFAULT `draft` |
+| … | | |
+
+UNIQUE (`page_id`, `section_key`).
+
+#### Specialised managers (tables or typed rows)
+
+| Table | Purpose |
+| --- | --- |
+| `cms_services` | Services catalogue items |
+| `cms_products` | OkangGroup-owned products |
+| `cms_portfolio_items` | Approved client-work showcases (may reference `clients.id` optionally) |
+| `cms_media_assets` | Media library metadata + `storage_path` |
+| `cms_navigation` | Menu trees (`parent_id`, `label`, `href`, `sort_order`) |
+| `cms_seo` | Per-page metadata (`page_id`, title, description, og fields) |
+| `contact_enquiries` | Public contact form submissions |
+| `cms_revisions` | Version history for pages/sections (`entity_type`, `entity_id`, `snapshot_json`, `revision_no`) |
+
+Publishing rules: draft → review → publish; restore from `cms_revisions`. Exact approval chain is workflow-configured ([§8](#8-workflow-state-machines)).
+
+**Design constraint:** Content model adapts to existing page structure; it must not mandate a visual redesign of the live site.
+
+---
+
+### Domain 8 — Operations (work allocation)
+
+#### `tasks`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NULL FK → `clients` |
+| `project_id` | `uuid` | NULL FK → `projects` |
+| `cms_instance_id` | `uuid` | NULL FK → `cms_instances` |
+| `title` | `text` | NOT NULL |
+| `description` | `text` | NULL |
+| `priority` | `text` | NOT NULL (lookup) |
+| `status` | `text` | NOT NULL (workflow) |
+| `due_at` | `timestamptz` | NULL |
+| `requires_approval` | `boolean` | NOT NULL DEFAULT false |
+| `created_by` | `uuid` | NULL |
+| `completed_at` | `timestamptz` | NULL |
+| `verification_status` | `text` | NULL (`unverified`, `verified`, `rejected`) |
+| … | | |
+
+At least one of client/project/cms/internal flag must situate the task ([OD-06](#14-open-decisions) for pure-internal tasks).
+
+#### `task_assignments`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `task_id` | `uuid` | NOT NULL FK → `tasks` ON DELETE CASCADE |
+| `assignee_profile_id` | `uuid` | NULL FK → `profiles` |
+| `assignee_team_id` | `uuid` | NULL FK → `teams` |
+| `assigned_by` | `uuid` | NULL FK → `profiles` |
+| `assignment_type` | `text` | NOT NULL CHECK IN (`manual`, `team`, `reassignment`, `escalation`) |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+CHECK: one of profile or team assignee. All changes audited.
+
+#### `task_dependencies`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `task_id` | `uuid` | FK → `tasks` ON DELETE CASCADE |
+| `depends_on_task_id` | `uuid` | FK → `tasks` ON DELETE CASCADE |
+| PK | | (`task_id`, `depends_on_task_id`) |
+| CHECK | | `task_id <> depends_on_task_id` |
+
+#### `approvals`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `entity_type` | `text` | NOT NULL (`task`, `change_request`, `cms_page`, `quotation`, `invoice`, `access_request`, …) |
+| `entity_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NULL |
+| `requested_by` | `uuid` | NOT NULL FK → `profiles` |
+| `approver_profile_id` | `uuid` | NULL |
+| `approver_role_id` | `uuid` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `pending` |
+| `decided_at` | `timestamptz` | NULL |
+| `decision_note` | `text` | NULL |
+| … | | |
+
+Ordinary client CMS publish tasks must not require Owner for every step; Operations Manager / Team Manager scopes apply within authorised grants.
+
+---
+
+### Domain 9 — Commercial
+
+#### `service_plans`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `code` | `text` | NOT NULL UNIQUE |
+| `name` | `text` | NOT NULL |
+| `billing_model` | `text` | NOT NULL CHECK IN (`one_time`, `monthly`, `annual`, `custom`) |
+| `default_amount` | `numeric(18,2)` | NULL |
+| `default_currency` | `char(3)` | NOT NULL DEFAULT `GBP` |
+| `includes_json` | `jsonb` | NOT NULL DEFAULT `[]` |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+#### `quotations`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `quote_number` | `text` | NOT NULL UNIQUE |
+| `status` | `text` | NOT NULL |
+| `currency_code` | `char(3)` | NOT NULL |
+| `subtotal` / `tax_total` / `total` | `numeric(18,2)` | NOT NULL |
+| `valid_until` | `date` | NULL |
+| `lines_json` | `jsonb` | NOT NULL |
+| … | | |
+
+#### `contracts`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `contract_number` | `text` | NOT NULL UNIQUE |
+| `title` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL |
+| `effective_on` / `ends_on` | `date` | NULL |
+| `storage_path` | `text` | NULL |
+| `terms_summary` | `text` | NULL |
+| … | | |
+
+#### `subscriptions`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `service_plan_id` | `uuid` | NOT NULL FK → `service_plans` |
+| `cms_instance_id` | `uuid` | NULL |
+| `status` | `text` | NOT NULL (`trial`, `active`, `past_due`, `paused`, `cancelled`, `expired`) |
+| `billing_interval` | `text` | NOT NULL (`monthly`, `annual`, `custom`) |
+| `amount` | `numeric(18,2)` | NOT NULL |
+| `currency_code` | `char(3)` | NOT NULL |
+| `current_period_start` / `current_period_end` | `date` | NOT NULL |
+| `cancel_at_period_end` | `boolean` | NOT NULL DEFAULT false |
+| … | | |
+
+#### `invoices` / `invoice_lines`
+
+| `invoices` column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `invoice_number` | `text` | NOT NULL UNIQUE |
+| `subscription_id` | `uuid` | NULL |
+| `contract_id` | `uuid` | NULL |
+| `status` | `text` | `draft`, `issued`, `paid`, `partially_paid`, `void`, `overdue` |
+| `currency_code` | `char(3)` | NOT NULL |
+| `issue_date` / `due_date` | `date` | |
+| `subtotal` / `tax_total` / `total` / `amount_paid` | `numeric(18,2)` | historical snapshot |
+| `fx_rate` / `fx_rate_as_of` | | optional |
+
+`invoice_lines`: `invoice_id`, `description`, `quantity`, `unit_amount`, `line_total`, optional `service_plan_id`.
+
+Pricing overrides are per contract/subscription row — never mutate past invoices when `service_plans.default_amount` changes.
+
+---
+
+### Domain 10 — Payments
+
+#### `payment_records`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `invoice_id` | `uuid` | NULL FK → `invoices` |
+| `amount` | `numeric(18,2)` | NOT NULL |
+| `currency_code` | `char(3)` | NOT NULL |
+| `paid_on` | `date` | NOT NULL |
+| `method` | `text` | NOT NULL (bank_transfer, cash, other, provider_pending) |
+| `provider` | `text` | NULL — unused until OD-01 |
+| `provider_ref` | `text` | NULL |
+| `status` | `text` | NOT NULL DEFAULT `recorded` |
+| `fx_rate` / `fx_rate_as_of` | | optional |
+| … | | |
+
+#### `credit_notes` / `refunds`
+
+Parallel structures referencing `invoice_id` / `payment_records.id` with immutable amounts and reason codes. Approval required via `approvals` for issue/refund above thresholds ([OD-07](#14-open-decisions)).
+
+#### `expenses`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `category` | `text` | NOT NULL |
+| `amount` / `currency_code` | | NOT NULL |
+| `spent_on` | `date` | NOT NULL |
+| `vendor_name` | `text` | NULL |
+| `client_id` | `uuid` | NULL (billable recharge) |
+| `project_id` | `uuid` | NULL |
+| `status` | `text` | NOT NULL |
+| … | | |
+
+#### `fx_rates`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `base_currency` | `char(3)` | NOT NULL |
+| `quote_currency` | `char(3)` | NOT NULL |
+| `rate` | `numeric(18,8)` | NOT NULL |
+| `as_of_date` | `date` | NOT NULL |
+| `source` | `text` | NOT NULL |
+| UNIQUE | | (`base_currency`, `quote_currency`, `as_of_date`, `source`) |
+
+---
+
+### Domain 11 — Support
+
+#### `tickets`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NOT NULL |
+| `ticket_number` | `text` | NOT NULL UNIQUE |
+| `subject` | `text` | NOT NULL |
+| `priority` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL (workflow) |
+| `project_id` / `cms_instance_id` / `monitored_service_id` | `uuid` | NULL |
+| `requester_profile_id` | `uuid` | NULL |
+| `assignee_profile_id` | `uuid` | NULL |
+| `first_response_due_at` / `resolve_due_at` | `timestamptz` | NULL |
+| `satisfaction_score` | `int` | NULL CHECK 1–5 |
+| … | | |
+
+Default statuses: `new` → `assigned` → `in_progress` → `awaiting_client` → `resolved` → `closed` (configurable).
+
+#### `ticket_messages`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `ticket_id` | `uuid` | NOT NULL FK ON DELETE CASCADE |
+| `client_id` | `uuid` | NOT NULL |
+| `author_profile_id` | `uuid` | NULL |
+| `visibility` | `text` | NOT NULL CHECK IN (`client_visible`, `internal`) |
+| `body` | `text` | NOT NULL |
+| `storage_paths` | `text[]` | NULL |
+| `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+#### `incidents`
+
+Operational incidents (may link multiple clients/services).
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `title` | `text` | NOT NULL |
+| `severity` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL |
+| `started_at` / `resolved_at` | `timestamptz` | |
+| `summary` | `text` | NULL |
+| `client_id` | `uuid` | NULL |
+| `monitored_service_id` | `uuid` | NULL |
+| … | | |
+
+---
+
+### Domain 12 — Monitoring
+
+#### `monitored_services`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `client_id` | `uuid` | NULL (NULL = OkangGroup-owned) |
+| `cms_instance_id` | `uuid` | NULL |
+| `name` | `text` | NOT NULL |
+| `service_type` | `text` | NOT NULL (`website`, `api`, `cms`, `ssl`, `domain`, `backup`, `integration`) |
+| `target` | `text` | NOT NULL (URL/host) |
+| `is_authorised` | `boolean` | NOT NULL DEFAULT false — monitoring only if authorised |
+| `check_mode` | `text` | NOT NULL CHECK IN (`live_check`, `manual_status`) |
+| `status` | `text` | NOT NULL DEFAULT `unknown` |
+| `ssl_expires_on` / `domain_expires_on` | `date` | NULL |
+| … | | |
+
+#### `health_checks`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `monitored_service_id` | `uuid` | NOT NULL |
+| `checked_at` | `timestamptz` | NOT NULL DEFAULT now() |
+| `ok` | `boolean` | NOT NULL |
+| `latency_ms` | `int` | NULL |
+| `detail` | `text` | NULL |
+| `source` | `text` | NOT NULL (`probe`, `manual`) |
+
+Append-oriented; retention policy OD-04.
+
+#### `alerts`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `monitored_service_id` | `uuid` | NULL |
+| `client_id` | `uuid` | NULL |
+| `severity` | `text` | NOT NULL |
+| `title` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL (`open`, `acknowledged`, `resolved`) |
+| `opened_at` / `resolved_at` | `timestamptz` | |
+| … | | |
+
+---
+
+### Domain 13 — Notifications
+
+#### `notifications`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `profile_id` | `uuid` | NOT NULL FK → `profiles` ON DELETE CASCADE |
+| `category` | `text` | NOT NULL |
+| `title` | `text` | NOT NULL |
+| `body` | `text` | NOT NULL |
+| `payload_json` | `jsonb` | NOT NULL DEFAULT `{}` |
+| `is_critical` | `boolean` | NOT NULL DEFAULT false |
+| `read_at` | `timestamptz` | NULL |
+| `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+#### `notification_preferences`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `profile_id` | `uuid` | NOT NULL |
+| `category` | `text` | NOT NULL |
+| `channel` | `text` | NOT NULL CHECK IN (`in_app`, `email`) |
+| `enabled` | `boolean` | NOT NULL DEFAULT true |
+| PK | | (`profile_id`, `category`, `channel`) |
+
+Critical security categories ignore `enabled = false` for ordinary users.
+
+#### `delivery_attempts`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `notification_id` | `uuid` | NOT NULL |
+| `channel` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL |
+| `attempted_at` | `timestamptz` | NOT NULL DEFAULT now() |
+| `error` | `text` | NULL |
+
+---
+
+### Domain 14 — Security
+
+#### `audit_events` (append-only)
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `actor_profile_id` | `uuid` | NULL |
+| `actor_kind` | `text` | NOT NULL (`user`, `system`, `service`) |
+| `action` | `text` | NOT NULL |
+| `entity_type` | `text` | NOT NULL |
+| `entity_id` | `uuid` | NULL |
+| `client_id` | `uuid` | NULL |
+| `severity` | `text` | NOT NULL DEFAULT `info` |
+| `before_json` / `after_json` | `jsonb` | NULL |
+| `ip` | `inet` | NULL |
+| `user_agent` | `text` | NULL |
+| `created_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+Indexes: `(client_id, created_at DESC)`, `(actor_profile_id, created_at DESC)`, `(entity_type, entity_id)`.
+
+#### `access_reviews`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `subject_profile_id` | `uuid` | NOT NULL |
+| `reviewed_by` | `uuid` | NOT NULL |
+| `outcome` | `text` | NOT NULL |
+| `notes` | `text` | NULL |
+| `reviewed_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+#### `security_incidents`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `title` | `text` | NOT NULL |
+| `severity` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL |
+| `detected_at` | `timestamptz` | NOT NULL |
+| `resolved_at` | `timestamptz` | NULL |
+| `summary` | `text` | NULL |
+| … | | |
+
+Owner actions are audited the same as any privileged actor. Contractual/legal restrictions on client PII are enforced via permissions + scope + application checks — Owner role is not a silent bypass for excluded sensitive CMS modules ([OD-08](#14-open-decisions)).
+
+---
+
+### Domain 15 — Configuration (Configuration Studio)
+
+#### `settings`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `key` | `text` | PK |
+| `value_json` | `jsonb` | NOT NULL |
+| `is_secret` | `boolean` | NOT NULL DEFAULT false |
+| `description` | `text` | NULL |
+| `updated_by` | `uuid` | NULL |
+| `updated_at` | `timestamptz` | NOT NULL DEFAULT now() |
+
+Secrets must not be readable via anon key; prefer external secret refs.
+
+#### `feature_flags`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `key` | `text` | PK |
+| `enabled` | `boolean` | NOT NULL DEFAULT false |
+| `description` | `text` | NULL |
+| … | | |
+
+#### `workflow_definitions`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `workflow_key` | `text` | NOT NULL UNIQUE (`project_lifecycle`, `task`, `support_ticket`, `company_cms_publish`, `subscription`) |
+| `definition_json` | `jsonb` | NOT NULL — states, transitions, required permissions, skip rules |
+| `version` | `int` | NOT NULL DEFAULT 1 |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| … | | |
+
+Validation: Configuration Studio writes must pass server-side schema validation; cannot grant `permissions` codes outside allowed admin operations; cannot disable audit; cannot widen RLS by config alone.
+
+#### `lookup_values`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `set_key` | `text` | NOT NULL |
+| `code` | `text` | NOT NULL |
+| `label` | `text` | NOT NULL |
+| `sort_order` | `int` | NOT NULL DEFAULT 0 |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| UNIQUE | | (`set_key`, `code`) |
+
+---
+
+## 5. Permission and RLS contracts
+
+### 5.1 Helper predicates (intent)
+
+Implement as `SECURITY DEFINER` functions in schema `private` (OD-02 A) — not exposed via the Data API:
+
+| Function | Intent |
+| --- | --- |
+| `private.current_profile_id()` | `auth.uid()` mapped to `profiles.id` |
+| `private.has_permission(code text)` | platform-scoped grant exists |
+| `private.has_permission_on_client(code, client_id)` | grant with platform OR matching client scope |
+| `private.has_permission_on_project(code, project_id)` | client/project scope chain |
+| `private.has_permission_on_cms(code, cms_instance_id)` | cms scope |
+| `private.is_client_member(client_id)` | active `client_memberships` |
+| `private.can_read_finance(client_id)` | explicit finance permission — not implied by ops roles |
+
+**Never** authorise from `auth.jwt() -> user_metadata`. Prefer `profiles` + grants tables; if using JWT claims, only `app_metadata` maintained by service role, with documented refresh lag.
+
+### 5.2 Policy families
+
+| Table family | SELECT | INSERT/UPDATE | DELETE |
+| --- | --- | --- | --- |
+| `profiles` | self; staff with `people.read`; limited client-visible fields via views | self limited fields; admin for status | forbid (offboard instead) |
+| Org tables | staff with `org.read` | `org.manage` | soft-deactivate |
+| `role_grants` | security admins; self read own | `security.grants.manage` | revoke = status update |
+| `clients` | staff scoped OR client members (own client) | `clients.write` scoped | archive only |
+| Client child tables | same tenant + permission | scoped write | soft or RESTRICT |
+| Finance tables | `finance.*` only | finance roles | void/credit flows, not silent delete |
+| Company CMS | `company_cms.*` staff | editors + publish approval | archive |
+| CMS registry | staff with `cms_registry.*` scoped by client; client members see own non-sensitive connection status | manage modes per permission | retire |
+| `tasks` / `approvals` | assignees, scoped managers, relevant client visibility rules | assign within grant scope | soft cancel |
+| `tickets` | client members (own, non-internal notes); support staff scoped | create/reply rules by visibility | close only |
+| `audit_events` | `security.audit.read` (scoped by client where present) | insert via trigger/service only | deny |
+| `settings` / workflows | platform admin | platform admin with validation | deny destructive on system keys |
+| Monitoring | ops/monitoring roles; client may see own authorised services if granted | probe writers = service role | — |
+
+### 5.3 Client portal isolation
+
+Client users:
+
+- See only their `client_id` rows.
+- Never see other clients, staff HR records, internal notes (`notes_internal`, internal ticket messages), profit margins, or platform settings.
+- CMS UI access further limited by `cms_instances.management_mode` and module permissions.
+
+### 5.4 Staff vs Owner
+
+- Owner: broad platform configuration and commercial administration via permissions on `owner` role — still audited.
+- Owner does **not** automatically receive content access inside external sensitive CMS modules marked `is_sensitive` / `hosted_in = external_cms` without an explicit time-limited audited grant (OD-08 A). Even with such a grant, client contractual access restrictions take precedence and cannot be overridden by an internal Owner grant.
+
+### 5.5 RLS enablement
+
+`ALTER TABLE … ENABLE ROW LEVEL SECURITY` on every `public` table. No table relies on “hidden from UI” alone. Views that join tenant data use `security_invoker = true` (Postgres 15+).
+
+---
+
+## 6. Client CMS integration model
+
+### 6.1 Three components (per V2.0)
+
+| Component | Where it lives | Platform DB responsibility |
+| --- | --- | --- |
+| A. Management UI | Route under okanggroup.com (e.g. `/cms/{slug}`) | AuthZ via grants + `cms_instances` |
+| B. CMS backend | Often separate service/DB | Registry + connection health only |
+| C. Client application | Client domain | Out of platform DB |
+
+### 6.2 Connection contract (logical)
+
+```text
+Platform  --(cms_connections.auth_method + credential_ref)-->  Client CMS API
+Platform stores: instance metadata, module map, migration state, task links
+Client CMS stores: content, media, domain-specific business data
+```
+
+API operations (design intent, not code): authenticate service identity; authorise acting user scopes mirrored or checked server-side; never copy excluded sensitive modules during migration.
+
+### 6.3 Management modes
+
+| Mode | Who mutates content in client CMS | Platform tasks |
+| --- | --- | --- |
+| OkangGroup Managed | Staff with cms scope | Full ops workflow |
+| Client Managed | Client portal users | Support + monitoring optional |
+| Hybrid | Both per module ACL | Module-level grants required |
+
+### 6.4 Example registry rows (illustrative, not seed mandates)
+
+| Client | CMS slug | Kind |
+| --- | --- | --- |
+| Treasure House Bible Church International | `treasure-house` | Church website CMS |
+| Noble Express Courier | `noble-express` | Courier website CMS |
+| SparkleValeting | `sparkle-valeting` | Valeting website CMS |
+
+---
+
+## 7. Delegation and offboarding
+
+### 7.1 Delegation rules (data support)
+
+- Manual / team / reassignment / escalation via `task_assignments.assignment_type`.
+- Managers assign only within `access_scopes` they hold (`operations.assign` permission).
+- Workload views: count open tasks per `assignee_profile_id` / team (application query; optional materialised view later).
+- Approval requirements from `tasks.requires_approval` + `workflow_definitions`.
+
+### 7.2 Staff offboarding
+
+1. Set `profiles.account_status = offboarded`, `offboarded_at = now()`.
+2. End `staff_memberships`, revoke `role_grants` / `temporary_access`.
+3. Reassign open `tasks`, tickets, approvals.
+4. Invalidate sessions (Auth admin API — application phase).
+5. Retain audit history.
+
+### 7.3 Client offboarding / archive
+
+1. `clients.account_status = archived`, `archived_at`.
+2. Suspend client portal memberships; revoke invitations.
+3. Pause subscriptions with recorded reason; do not delete invoices/payments.
+4. Set `cms_instances.status = retired` or `disconnected`; revoke credentials via secret rotation runbook ([OD-09](#14-open-decisions)).
+5. Monitoring: disable checks (`is_authorised = false`) unless contractual retention monitoring remains.
+6. Export/retention obligations — Open Decision OD-04 / OD-09.
+
+---
+
+## 8. Workflow state machines
+
+Stored in `workflow_definitions.definition_json`. Defaults below are seeds, not immutable code.
+
+### 8.1 Project lifecycle
+
+States: `enquiry`, `proposal`, `approved`, `planning`, `development`, `testing`, `client_review`, `delivered`, `maintenance`, plus terminal `cancelled`.  
+Transitions: forward, skip (permission-gated), return-for-correction, cancel.
+
+### 8.2 Tasks
+
+Example states: `backlog`, `assigned`, `in_progress`, `blocked`, `in_review`, `done`, `cancelled`.  
+Hooks: assignment events → notifications; completion → verification; escalation transition requires reason.
+
+### 8.3 Support tickets
+
+`new` → `assigned` → `in_progress` → `awaiting_client` → `resolved` → `closed` (+ configurable).
+
+### 8.4 Company CMS publish
+
+`draft` → `in_review` → `scheduled` → `published` → `archived`; restore from revision creates new draft from snapshot.
+
+### 8.5 Subscriptions
+
+`trial` → `active` ↔ `past_due` → `paused` / `cancelled` / `expired`.  
+Overdue invoice automation rules — Open Decision ([OD-10](#14-open-decisions)).
+
+---
+
+## 9. Free-tier capacity considerations
+
+Design for Supabase Free plan limits (verify current numbers in Supabase docs before go-live; treat below as planning triggers, not guarantees):
+
+| Resource | Design implication | Upgrade trigger (suggested) |
+| --- | --- | --- |
+| Database size | Avoid storing large binaries in Postgres; use Storage | DB approaching plan limit |
+| Row volume (`health_checks`, `audit_events`, `delivery_attempts`) | Partition/archive strategy; sampling for probes | Sustained high insert rates |
+| Auth MAU | Staff + client users only; no public auth for marketing site | Client portal expansion |
+| Egress | CMS proxies should not mirror large media through platform | Heavy media proxying |
+| Edge functions / cron | Minimal probes on Free; prefer external uptime later if needed | Frequent multi-site monitoring |
+| Concurrent connections | Server-side pooling; avoid chatty client polling | Many admin users concurrent |
+
+Monitoring probes: prefer low frequency + manual status for non-critical sites on Free tier.
+
+---
+
+## 10. Dependency-ordered migration plan (not applied)
+
+Migrations are named for future implementation. **None are applied in this phase.**
+
+| Migration | Depends on | Creates |
+| --- | --- | --- |
+| M0 | — | Extensions (`pgcrypto`, `citext`); `updated_at` trigger fn; optional `private` schema |
+| M1 | M0 | `profiles`, `invitations`, `account_status_events`; profile trigger on `auth.users` |
+| M2 | M1 | `permissions`, `roles`, `role_permissions`, `access_scopes`, `role_grants`, `temporary_access`; seed permission catalogue + system roles |
+| M3 | M1 | `departments`, `teams`, `job_titles`, `staff_memberships` |
+| M4 | M1–M2 | `clients`, `client_contacts`, `client_memberships`, `client_services` |
+| M5 | M4 | `service_plans`, `quotations`, `contracts`, `subscriptions`, `invoices`, `invoice_lines` |
+| M6 | M4–M5 | `projects`, deliverables, milestones, change_requests, project_documents |
+| M7 | M4 | `cms_instances`, `cms_modules`, `cms_connections`, `cms_migrations` |
+| M8 | M1–M2 | Company CMS tables + `contact_enquiries` |
+| M9 | M3–M7 | `tasks`, `task_assignments`, `task_dependencies`, `approvals` |
+| M10 | M5 | `payment_records`, `credit_notes`, `refunds`, `expenses`, `fx_rates` |
+| M11 | M4 | `tickets`, `ticket_messages`, `incidents` |
+| M12 | M4–M7 | `monitored_services`, `health_checks`, `alerts` |
+| M13 | M1 | `notifications`, `notification_preferences`, `delivery_attempts` |
+| M14 | M1 | `audit_events`, `access_reviews`, `security_incidents`; audit triggers on critical tables |
+| M15 | M2 | `settings`, `feature_flags`, `workflow_definitions`, `lookup_values`; seed workflows + lookups |
+| M16 | M2–M15 | RLS policies + helper functions; Storage bucket policies (app phase may split) |
+
+Mapping to V2.0 delivery phases:
+
+| V2.0 phase | Migrations |
+| --- | --- |
+| 1 Database foundation & auth | M0–M2 |
+| 2 Roles, departments, staff | M2–M3 |
+| 3 Owner dashboard | reads from M1–M15 (views later) |
+| 4 Clients & projects | M4–M6 |
+| 5 Company CMS | M8 |
+| 6 Client CMS framework | M7 |
+| 7 Work allocation | M9 |
+| 8 Finance & subscriptions | M5, M10 |
+| 9 Support & monitoring | M11–M12 |
+| 10 Reports, config, audit | M13–M15 |
+| 11 CMS integration pilot | data in M7 + external systems |
+| 12 Security testing | M16 hardening + tests |
+
+---
+
+## 11. Acceptance criteria for a future implementation phase
+
+Before any production migration apply:
+
+1. Owner approved this V2.1 document (or a superseding revision).
+2. MCP/read access confirmed on `prbgsnxpwyepdggdysnt` under `okanggroup@gmail.com`.
+3. Open Decisions blocking that phase are resolved.
+4. RLS policies written and tested with staff, client, and negative cross-tenant cases.
+5. No automatic production deploy.
+
+---
+
+## 12. Explicit non-goals of V2.1
+
+- Application UI / routing implementation
+- Framework migration of the Vite marketing site
+- Applying SQL to Supabase
+- Live payment provider integration
+- Automatic migration of Treasure House / NiiNai sensitive modules
+- Use of project `vzgfvzzbgrlxvixejmdt`
+
+---
+
+## 13. Document control
+
+| Version | Date | Notes |
+| --- | --- | --- |
+| 2.1.0 | 2026-10-11 | Initial complete 15-domain design contract for Owner review |
+| 2.1.1 | 2026-10-11 | Added option sets for six Phase-1 critical decisions |
+| 2.1.2 | 2026-10-11 | Recorded Owner choices OD-02/05/08/11/12/14 = A with OD-08/OD-14 safeguards; document remains under review / **not frozen** |
+
+**Git status note:** Published on a dedicated review branch for GitHub examination. Must not be merged to the production/default branch until the Owner freezes V2.1 after full schema review. Coding HOLD remains; no migrations.
+
+**Recommended specification sequence (Owner):** V2.1 review → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
+
+---
+
+## 14. Open Decisions
+
+Cursor must not invent answers for these. Owner (or designated officer) decides before the relevant migration phase.
+
+| ID | Topic | Why it blocks | Needed decision |
+| --- | --- | --- | --- |
+| OD-01 | Payment provider | Payments domain provider fields / webhooks | Provider choice, settlement entity, compliance obligations; or confirm manual-only indefinitely |
+| ID | Topic | Status | Decision / remaining need |
+| --- | --- | --- | --- |
+| OD-01 | Payment provider | Open | Provider choice, settlement entity, compliance; or confirm manual-only |
+| OD-02 | Private schema for helpers | **Recorded A** | See §14.3 — direction accepted; verify against full schema |
+| OD-03 | Tax and rounding | Open | VAT/GST treatment per jurisdiction; rounding mode |
+| OD-04 | Retention | Open | Retention periods; legal hold; purge authority |
+| OD-05 | Permission catalogue mutability | **Recorded A** | See §14.3 — direction accepted; verify against full schema |
+| OD-06 | Internal tasks without client | Open | Allow `is_internal` tasks with NULL `client_id`? |
+| OD-07 | Credit/refund approval thresholds | Open | Amount thresholds and required roles |
+| OD-08 | Owner access to client PII / sensitive CMS | **Recorded A** | See §14.3 — plus contractual non-override safeguard |
+| OD-09 | Offboarding runbook | Open | Secret rotation, export package, deletion timelines |
+| OD-10 | Subscription dunning | Open | Grace period, CMS suspension, notification cadence |
+| OD-11 | MFA enforcement set | **Recorded A** | See §14.3 |
+| OD-12 | Invitation channel | **Recorded A** | See §14.3; sender domain still OD-15 |
+| OD-13 | First CMS pilot | Open | Which client CMS is first integration target |
+| OD-14 | Admin app hosting | **Recorded A** | See §14.3 — plus public-site independence safeguard |
+| OD-15 | Official email | Open | `@okanggroup.com` sender for invites/notifications |
+| OD-16 | Cross-border data | Open | Data processing roles; CMS backend residency |
+| OD-17 | Invoice numbering | Open | Format, reset rules, multi-currency sequences |
+| OD-18 | Client-visible project fields | Open | Default client-visible project/finance fields |
+
+### 14.1 Six Phase-1 critical decisions — meaning, consequences, options
+
+Owner has recorded option **A** for all six ([§14.3](#143-recorded-architecture-decisions-direction-accepted-schema-not-frozen)). The option tables remain for audit trail. The full database architecture is **not frozen** until the Owner completes schema review.
+
+---
+
+#### OD-02 — Private schema for RLS helper functions
+
+**What it means:** Authorisation helpers such as `has_permission_on_client(...)` must run with elevated rights (`SECURITY DEFINER`) so they can read grant tables under RLS. Where those functions live determines whether the Supabase Data API can call them accidentally.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended)** | Create schema `private`; put all `SECURITY DEFINER` helpers there; revoke `USAGE` on `private` from `anon` / `authenticated`; grant execute only as needed to `authenticated` for specific functions | Strongest default; matches Supabase guidance; slightly more migration ceremony |
+| **B** | Keep helpers in `public` but `REVOKE ALL` from `anon`/`authenticated` except explicit `GRANT EXECUTE` on named functions | Simpler schema map; higher risk of mis-grant if someone adds a new function carelessly |
+| **C** | No DB helpers; enforce all authorisation only in application server code | Weaker defense-in-depth; RLS becomes thin; not recommended for multi-tenant client data |
+
+**Affects:** M0, M16, every RLS policy.
+
+---
+
+#### OD-05 — Permission catalogue mutability (Configuration Studio)
+
+**What it means:** Who may create or rename permission codes such as `finance.invoice.issue`. If Configuration Studio can invent powerful codes freely, an admin misconfiguration could bypass intended security.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended)** | Split catalogue: `is_system = true` permission codes are immutable except via migration / Owner-approved change control; Configuration Studio may only create non-sensitive operational codes (`allows_config_create = true`) and may assign existing codes to roles | Safe expansion without silent privilege invention |
+| **B** | Entire catalogue frozen; only migrations add permissions; Studio only maps roles ↔ existing permissions | Maximum safety; slower product evolution; every new feature needs a migration |
+| **C** | Studio may create any permission code including sensitive ones (Owner/platform_admin only) | Flexible; high blast radius if Owner account compromised |
+
+**Affects:** M2 seed data, Domain 15 validation rules, V2.2 permission matrices.
+
+---
+
+#### OD-08 — Owner access to client PII / sensitive CMS modules
+
+**What it means:** The Owner role administers OkangGroup’s platform. That is not the same as a contractual right to open every client’s pastoral records, courier PII, or internal finance ledgers inside an external CMS.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended / recorded)** | Owner has platform-wide grants for OkangGroup operational data (clients directory, contracts OkangGroup holds, support, registry). Access to `cms_modules.is_sensitive = true` / external CMS content requires a separate time-bounded `temporary_access` (or explicit cms scope grant) plus audit. **Safeguard:** an internal Owner grant must never override a client’s explicit contractual access restrictions | Matches V2.0 legal posture; supports client trust |
+| **B** | Owner may open any connected CMS module including sensitive ones, always audited | Operationally convenient; higher contractual/regulatory risk; clients may reject |
+| **C** | Owner cannot access any client CMS content; only designated staff with client scope | Safest for clients; Owner may be blocked from emergency support without delegation |
+
+**Affects:** RLS for CMS proxy routes, `temporary_access`, V2.3 CMS integration, support emergencies.
+
+---
+
+#### OD-11 — MFA enforcement set
+
+**What it means:** Which account kinds/roles cannot sign in without multi-factor authentication from day one.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended)** | MFA required for `owner`, `platform_admin`, `finance_user`, and any grant that includes `is_sensitive` permissions; MFA optional but encouraged for other staff; MFA optional for `client_user` initially | Strong protection where breach cost is highest; lower friction for client portal MVP |
+| **B** | MFA required for all `staff` accounts from day one; client users optional | Stronger internal security; onboarding friction for every employee |
+| **C** | MFA required for everyone including client portal users | Highest security; support burden; may block less technical client contacts |
+
+**Affects:** `profiles.mfa_required`, Auth settings, invitation acceptance UX (implementation later).
+
+---
+
+#### OD-12 — Invitation channel
+
+**What it means:** How staff and client users are brought into Supabase Auth before they have a password/session.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended)** | Email invitation with secure single-use link (token stored hashed in `invitations`); user sets password on accept; magic-link login allowed later as optional sign-in method | Clear audit trail; works for staff and clients; needs working sender domain (see OD-15) |
+| **B** | Magic-link only (no password) for all users | Simpler UX; email dependency for every login; weaker for shared mailboxes |
+| **C** | Owner/admin creates accounts and issues temporary passwords out-of-band | Faster early testing; poor security hygiene; not recommended beyond break-glass |
+
+**Affects:** `invitations` table semantics, Auth providers, email infrastructure (OD-15).
+
+---
+
+#### OD-14 — Admin / platform app hosting vs existing Vite site
+
+**What it means:** How secure routes (`/login`, `/dashboard`, `/admin/*`, `/cms/*`) coexist with the current static Vite marketing site on Vercel without forcing a full rewrite.
+
+| Option | Description | Consequence |
+| --- | --- | --- |
+| **A (recommended / recorded)** | Keep marketing site as current Vite static app; add a second application (e.g. `apps/platform`) deployed to the same domain via Vercel rewrites for `/login`, `/dashboard`, `/admin`, `/cms` (and API routes), leaving `/` and marketing assets on the existing build. **Safeguard:** routing must keep the public website available even if the administration application is unavailable | Preserves branding and current site; clear security boundary; modest DevOps complexity |
+| **B** | Single codebase migration: fold marketing pages into one full-stack framework app | One deploy unit; highest rewrite risk to the live site; conflicts with “do not replace Vite simply because it lacks a framework” |
+| **C** | Platform on subdomain `platform.okanggroup.com` (or `admin.`); marketing stays on apex | Simplest isolation; cookie/SSO and brand URL trade-offs; clients type a different host |
+
+**Affects:** No database tables directly; blocks application scaffolding choices after V2.4; must be decided before coding so M8 company CMS publish targets the correct runtime.
+
+---
+
+### 14.2 How to reply (Owner)
+
+Phase-1 critical decisions are recorded in §14.3. Remaining open decisions (OD-01, OD-03, OD-04, OD-06, OD-07, OD-09, OD-10, OD-13, OD-15–OD-18) still require Owner input before later phases. Schema amendments from full document review may revise V2.1 without freezing.
+
+### 14.3 Recorded architecture decisions (direction accepted; schema not frozen)
+
+| Field | Value |
+| --- | --- |
+| Decision record | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` |
+| Recorded date | 2026-10-11 |
+| Effect | Establishes Phase-1 **direction** |
+| Freeze status | **Not frozen** — subject to verification against the complete schema during Owner review |
+
+| Decision | Option | Binding requirement |
+| --- | --- | --- |
+| **OD-02** | A | RLS helper functions reside in a private, non-exposed schema (`private`). |
+| **OD-05** | A | System permission codes remain immutable. Configuration Studio may manage authorised role mappings and approved non-sensitive operation codes only. |
+| **OD-08** | A | Owner access does not automatically extend to confidential client CMS data. Sensitive access requires an explicit, time-limited, audited grant. **Additional safeguard:** sensitive access must also respect the client’s contractual permissions; an internal Owner grant must never override a client’s explicit access restrictions. |
+| **OD-11** | A | MFA is mandatory for Owner, Platform Admin, finance users, and anyone holding sensitive permissions. |
+| **OD-12** | A | Email invitation followed by secure account setup. Magic links may be introduced later. |
+| **OD-14** | A | Preserve the existing Vite public website. Introduce a separate secure administration application through same-domain routing. **Additional safeguard:** design routing so the public website continues working even if the administration application becomes unavailable. |
+
+These decisions do **not** authorise SQL migrations, application code, or production deployment.
+
+---
+
+## 15. Owner review checklist
+
+- [ ] Confirm Supabase MCP access as `okanggroup@gmail.com` to `prbgsnxpwyepdggdysnt`
+- [ ] Examine complete domain table list and amend if required
+- [ ] Examine RBAC + scope model and amend if required
+- [ ] Examine CMS registry boundary (no sensitive module ingestion by default)
+- [ ] Examine migration order M0–M16
+- [x] Record Phase-1 decisions OD-02, OD-05, OD-08, OD-11, OD-12, OD-14 (option A) — **direction only; not a freeze**
+- [ ] Freeze V2.1 explicitly after full schema review (not done)
+- [ ] Authorise a future coding phase explicitly (this document alone does not authorise coding)
+
+---
+
+**End of OkangGroup Database Architecture V2.1.2 — under review on a dedicated GitHub branch. NOT FROZEN. CODING HOLD remains in effect.**
