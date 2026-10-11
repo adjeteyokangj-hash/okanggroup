@@ -4,10 +4,22 @@ Official standalone company website for [okanggroup.com](https://okanggroup.com)
 
 OkangGroup is a digital product and software group that builds practical websites, apps, systems, and platforms.
 
+## Ownership / deployment structure
+
+```text
+OKANGGROUP
+├── GitHub: adjeteyokangj-hash/okanggroup
+├── Vercel: adjeteyokangj-hashs-projects / okanggroup
+├── Cloudflare zone: okanggroup.com → Vercel DNS
+└── Public: https://okanggroup.com + https://www.okanggroup.com
+```
+
+Treasure House (`treasure-house-bci` / `thbci.org`) stays separate.
+
 ## Live URLs
 
-- Production (Vercel): https://okanggroup.vercel.app
-- Custom domain: https://okanggroup.com (after Cloudflare DNS is pointed at GitHub Pages)
+- Production alias: https://okanggroup-two.vercel.app
+- Custom domains (after Cloudflare DNS): https://okanggroup.com · https://www.okanggroup.com
 - Source: https://github.com/adjeteyokangj-hash/okanggroup
 
 ## Local development
@@ -25,22 +37,29 @@ npm run build
 
 Static output is written to `dist/`.
 
-## Deploy notes
+## Cloudflare DNS (points to Vercel)
 
-GitHub Pages serves the custom domain from the `gh-pages` branch. After building locally:
+In Cloudflare → `okanggroup.com` → DNS (proxy **DNS only** / grey cloud):
 
-1. Publish the contents of `dist/` (including `CNAME`) to the `gh-pages` branch.
-2. In Cloudflare DNS for `okanggroup.com`, add:
+| Type | Name | Content |
+|------|------|---------|
+| CNAME | `@` | `8cb847e22ffcb799.vercel-dns-016.com` |
+| CNAME | `www` | `8cb847e22ffcb799.vercel-dns-016.com` |
 
-| Type | Name | Content | Proxy |
-|------|------|---------|-------|
-| A | `@` | `185.199.108.153` | DNS only |
-| A | `@` | `185.199.109.153` | DNS only |
-| A | `@` | `185.199.110.153` | DNS only |
-| A | `@` | `185.199.111.153` | DNS only |
-| CNAME | `www` | `adjeteyokangj-hash.github.io` | DNS only |
+Fallback if CNAME flattening is unavailable for apex:
 
-3. In the GitHub repo → Settings → Pages, confirm the custom domain is `okanggroup.com` and enable HTTPS once DNS has verified.
+| Type | Name | Content |
+|------|------|---------|
+| A | `@` | `216.150.1.1` |
+| A | `@` | `216.150.16.1` |
+| CNAME | `www` | `8cb847e22ffcb799.vercel-dns-016.com` |
+
+Then run:
+
+```bash
+vercel domains verify okanggroup.com --scope adjeteyokangj-hashs-projects
+vercel domains verify www.okanggroup.com --scope adjeteyokangj-hashs-projects
+```
 
 ## Notes
 
