@@ -512,6 +512,11 @@ p:last-child {
   color: var(--blue-bright);
 }
 
+.badge-live {
+  background: rgba(46, 184, 120, 0.16);
+  color: #5fd4a0;
+}
+
 .badge-soon {
   background: var(--orange-soft);
   color: var(--orange);
