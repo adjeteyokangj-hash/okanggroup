@@ -1608,6 +1608,7 @@ Before any production migration apply:
 | 2.1.5 | 2026-10-11 | Recorded business decisions (§14.5) with OD-03/07/17 amendments; OD-04 pending durations; business rules A/B/C. Architecture decisions OD-02/05/08/11/12/14 A preserved |
 | 2.1.6 | 2026-10-11 | Proposed OD-04 retention schedule, triggers, legal holds, deletion/backup controls (§16). OD-04 not approved/not closed |
 | 2.1.7 | 2026-10-11 | Retention refinements: record-type (not only table) rules; policy owner/version/review governance; deletion reversible only pre-execution; UK/Ghana legal verification checklist. Periods unchanged. **OD-04 open. Legal verification not claimed. Not frozen.** |
+| 2.1.7-R | 2026-10-11 | Companion technical readiness report for §16.8 checks. OD-04 still open; Supabase MCP unresolved; freeze not authorised |
 
 ### 13.1 V2.1.3 review amendment register
 
