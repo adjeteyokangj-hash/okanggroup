@@ -3,13 +3,14 @@
 | Field | Value |
 | --- | --- |
 | Status | **RELEASE 1 DESIGN INTENT FROZEN (Option A) — CODING HOLD** |
-| Version | **1.2.0** |
+| Version | **1.2.1** |
 | Based on | Cost Plan **1.1.2**; Database **V2.1.9** (P2); preserved **V2.1.8A**; V2.2.2; V2.3.1 |
 | Release 1 design freeze | **Option A approved 2026-10-11** — V2.1.9 + eight acceptance criteria locked for R1 build planning |
 | Full platform architecture freeze | **Not authorised** (OD-04 open; V2.2/V2.3 not frozen) |
 | Migration approach | **P2 accepted into V2.1.9** with mandatory composite tenant FKs — B1 cleared |
-| Coding / SQL / migrations / deploy | **HOLD** — Option A does **not** authorise implementation |
-| Next | One coordinated Release 1 build authorisation (not per-feature approvals), when Owner is ready |
+| Coding / SQL / migrations | **AUTHORISED** 2026-10-11 — complete Release 1 build under frozen design + safeguards |
+| Public website production deploy | **HOLD** — requires separate Owner approval |
+| Build authorisation | Apply only approved R1 migrations to `prbgsnxpwyepdggdysnt`; no per-feature stop/start approvals |
 
 Legend: **Ready** = design sufficient to implement when coding is authorised · **Gap** = must resolve before freeze/coding · **N/A** = not required for current slice
 
@@ -26,7 +27,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | 0.5 | DR-05 R3 schema out of R1 | ✅ Ready | Cost Plan 1.1.2 |
 | 0.6 | DR-06 Supabase workspace MCP | ✅ Ready | PASS `prbgsnxpwyepdggdysnt` |
 | 0.7 | DR-07 retain-by-default / no purge | ✅ Ready | OD-04 still open for purge later |
-| 0.8 | Explicit coding authorisation | ⬜ Gap | Not given — HOLD (separate from Option A) |
+| 0.8 | Explicit coding authorisation | ✅ Done | Complete R1 build authorised 2026-10-11; public deploy still HOLD |
 | 0.9 | Option A — Freeze R1 design intent | ✅ Done | 2026-10-11: V2.1.9 + eight acceptance criteria |
 
 ---
@@ -166,7 +167,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | --- | --- | --- |
 | B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **Resolved (docs)** — V2.1.9 P2 + composite tenant FKs; no migrations applied |
 | B2 | Owner has not frozen R1 acceptance criteria (4.2) / Option A | **Resolved** — Option A 2026-10-11 |
-| B3 | Coding authorisation not given (0.8) | **High** — still required; prefer one coordinated R1 build auth |
+| B3 | Coding authorisation not given (0.8) | **Resolved** — R1 build authorised; public deploy still HOLD |
 | B4 | Publish mechanism not selected (2.7) | **Medium** — blocks CMS publish slice, not Milestone 1 auth |
 | B5 | OD-15 email sender for invitations (operational) | **Medium** — blocks email invites; Owner bootstrap may use dashboard create |
 
@@ -209,5 +210,6 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | 1.1.1 | 2026-10-11 | Owner approved P2 for docs-only prep; proposal filed |
 | 1.1.2 | 2026-10-11 | P2 accepted into V2.1.9 with composite FKs; B1 resolved at docs level; coding HOLD |
 | 1.2.0 | 2026-10-11 | **Option A:** Freeze Release 1 design intent (V2.1.9 + eight acceptance criteria). Coding HOLD |
+| 1.2.1 | 2026-10-11 | Complete Release 1 build authorised; public website deploy remains HOLD |
 
-**End of checklist 1.2.0 — Release 1 design intent frozen. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD.**
+**End of checklist 1.2.1 — R1 design frozen; R1 build authorised; public deploy HOLD.**

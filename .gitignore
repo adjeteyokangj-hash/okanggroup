@@ -4,6 +4,9 @@ dist
 *.log
 .env
 .env.*
+admin/.env
+admin/dist
+admin/node_modules
 
 .vercel
 .vercel

@@ -1,0 +1,11 @@
+# Supabase local/CLI config — remote target: prbgsnxpwyepdggdysnt (okanggroup-platform)
+# Migrations are applied only to that project under Release 1 build authorisation.
+
+[project]
+id = "prbgsnxpwyepdggdysnt"
+
+[api]
+enabled = true
+
+[db]
+major_version = 17
