@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW — CODING HOLD — NOT FROZEN** |
-| Document version | **2.2.1** |
+| Document version | **2.2.2** |
 | Depends on | Database Architecture **V2.1.8A** (accepted technical baseline — **not modified by this document**) |
 | Supabase target | `okanggroup-platform` / `prbgsnxpwyepdggdysnt` (implementation later; not altered here) |
 | V2.1 freeze | **Not authorised** by this document |
@@ -27,7 +27,7 @@ V2.2 defines how OkangGroup operates day to day on top of the V2.1.8A data model
 - Client portal access  
 - Management delegation without Owner bottleneck  
 
-It does **not** change V2.1.8A schema text, freeze V2.1 or V2.2, or authorise implementation. Schema gaps are listed as **proposed V2.1 amendments** in §19.
+It does **not** change V2.1.8A schema text, freeze V2.1 or V2.2, or authorise implementation. Database implications are classified in §19 (required schema amendments vs existing-schema capabilities vs implementation details).
 
 ---
 
@@ -38,7 +38,7 @@ It does **not** change V2.1.8A schema text, freeze V2.1 or V2.2, or authorise im
 | **P1 — Owner control** | The Owner retains final authority over platform configuration, commercial policy, sensitive grants, and break-glass access — always audited, and **never** overriding client contractual / legal restrictions (OD-08 A). |
 | **P2 — Delegated management** | Authorised managers assign and supervise work within their department/team/client scopes without Owner approval for every routine action. |
 | **P3 — Client isolation** | Staff see only clients, projects, CMS instances, modules, and documents within their active scopes. Cross-tenant access is denied by design (V2.1.8A RLS + composite FKs). |
-| **P4 — No privilege escalation via delegation** | A principal may grant only permissions and scopes they hold **and** are authorised to delegate; recipients must be eligible (W-B). |
+| **P4 — No privilege escalation via delegation** | Delegation requires **both** explicit authority to delegate the permission family **and** effective coverage of the permission, resource scope, and CMS module being granted. A `*.delegate` right never independently authorises broader access (W-B / V2.2.2). |
 | **P5 — Identity-based duty separation** | Finance and other critical approvals evaluate the **acting user identity**, not merely whether any of their roles could approve (W-C). |
 | **P6 — Availability ≠ authorisation** | Staff availability and workload inform assignment; they never replace permission or scope checks (W-A). |
 
@@ -62,7 +62,7 @@ Supporting rules already recorded in V2.1:
 | `workflow_definitions` | Configurable stage machines |
 | §5 RLS helpers | Runtime enforcement intent (implementation later) |
 
-**Non-interference:** If V2.2 needs a schema change, it is raised as an explicit **proposed V2.1 amendment** (§19) — not silently applied to V2.1.8A. V2.2.1 still runs conceptually on V2.1.8A plus those proposed extensions.
+**Non-interference:** If V2.2 needs a schema change, it is classified in §19 and only applied in a future authorised V2.1 revision — not silently to V2.1.8A. V2.2.2 runs conceptually on V2.1.8A plus §19.1 required amendments when those are accepted.
 
 ---
 
@@ -157,7 +157,7 @@ Legend: **F** = full within scope · **R** = read · **W** = write/create · **A
 ‡ OD-07 + W-C: requester ≠ approver by **user identity** for credits/refunds and financial exceptions; thresholds configurable.  
 § Draft retention policy only; purge execution after OD-04 approval.  
 \* Sensitive modules: temporary_access + contractual profile; Owner grant cannot override client denial (OD-08 A).  
-‡‡ Managers may propose or grant **only** within §7.4 delegation rules (W-B); they cannot open Platform Admin grant UI for arbitrary roles.
+‡‡ Managers may propose or grant **only** within §7.4 dual-requirement rules and UD-03 exclusions; they cannot open Platform Admin grant UI for arbitrary roles. Managers request staff invitations only (UD-02).
 
 ### 6.3 MFA (OD-11 A + W-E)
 
@@ -176,8 +176,9 @@ MFA mandatory for: `owner`, `platform_admin`, `finance_user`, and any principal 
 | Escalate to another authorised manager | Manager | own scope → target must have scope | No |
 | Approve routine CMS publish (non-sensitive module) | Team Manager / designated approver | `cms_instance` + module | No |
 | Approve project stage advance (non-commercial) | Ops / Dept Manager | `project` / `client` | No |
-| Invite staff | Platform Admin / Owner | platform; invitation carries **exact** approved grant set (W-E) | Owner for `owner`/`platform_admin` roles |
-| Grant client / module scope to staff | Ops Mgr or Platform Admin per policy **and** §7.4 | only scopes the granter holds and may delegate | Owner for finance + sensitive bundles |
+| Invite staff | Platform Admin / Owner only (UD-02) | platform; invitation carries **exact** approved grant set (W-E) | Owner for `owner`/`platform_admin` roles; managers may **request** invitations only |
+| Grant routine task/project access | Ops Mgr within §7.4 + UD-03 | permission + scope the granter effectively holds and may delegate | Finance, security, privileged roles, sensitive CMS excluded |
+| Grant client / module scope (non-routine) | Platform Admin / Owner per policy **and** §7.4 | only scopes the granter holds and may delegate | Owner for finance + sensitive bundles |
 | Issue invoice | Finance | finance permission | No (policy) |
 | Approve credit/refund over threshold | Distinct **user** (W-C / OD-07) | finance | Owner/platform_admin if above top threshold |
 | Temporary sensitive CMS access | Owner or Platform Admin per policy | cms module + contract check | Owner for break-glass |
@@ -210,17 +211,17 @@ Managers must not assign solely because a person has the right permissions. Assi
 | Workload | Manager can see open assignments, priorities, and deadlines before confirming |
 | Scope of manager | Assigner may only assign within their own authorised scopes |
 
-**Availability statuses** are **configurable lookup data**, not hard-coded per department. Seed examples (Owner/Platform Admin may rename/extend):
+**Availability statuses** are **configurable lookup data** (UD-01), not hard-coded per department. Seed examples (Owner/Platform Admin may rename/extend):
 
-| Status code (example) | Meaning for new assignments |
+| Status code (example) | Meaning for new assignments (UD-01) |
 | --- | --- |
-| `available` | Eligible for new assignments |
-| `busy` | May take limited / priority-only work per policy |
-| `on_leave` | Not eligible |
-| `absent` | Not eligible |
-| `unavailable` | Not eligible for new assignments |
+| `available` | Eligible for ordinary new assignments |
+| `busy` | Ordinary assignment blocked unless a **recorded manager override** is supplied |
+| `on_leave` | Blocks ordinary assignments |
+| `absent` | Blocks ordinary assignments |
+| `unavailable` | Blocks ordinary assignments |
 
-Operational consideration only: availability **never** grants access the employee lacks, and never bypasses client isolation or contractual denials.
+Operational consideration only: availability **never** grants access the employee lacks, and never bypasses client isolation or contractual denials. Overrides are audited and do not weaken permission checks.
 
 Managers should see, within their authorised scope:
 
@@ -229,24 +230,30 @@ Managers should see, within their authorised scope:
 - Upcoming deadlines for those tasks  
 - Team workload distribution (for Ops / Dept / Team Managers)  
 
-Schema support for availability and workload views is a **proposed V2.1 amendment** (§19 PA-01, PA-02).
+Database classification: §19 PA-01 (schema), PA-02 (existing-schema capability).
 
-### 7.4 Strict permission delegation (W-B)
+### 7.4 Strict permission delegation (W-B) — V2.2.2
 
-**Rule:** A manager must never grant permissions, roles, scopes, or module accesses that they do not possess **or** are not authorised to delegate.
+**Final rule:** A manager must never grant permissions, roles, scopes, or module accesses unless **both** of the following are true:
+
+1. **Delegation authority** — The manager has explicit authority to delegate that permission family (e.g. a dedicated `*.delegate` right under Owner policy / UD-03).  
+2. **Effective coverage** — The manager’s own effective authority covers the **permission**, **resource scope**, and **CMS module** being granted.
+
+A delegation permission must **never** independently authorise broader access. Holding `tasks.assign.delegate` without also holding effective `tasks.assign` (and the target scope/module) is insufficient. Conversely, holding a permission without delegation authority does not allow granting it to others.
 
 | Check | Detail |
 | --- | --- |
-| Granter authority | Granter’s effective permissions must include every permission code being granted **or** a dedicated `*.delegate` right for that family (Owner policy) |
-| Granter scope | Granter’s active scopes must cover every target scope (client, project, cms_instance, cms_module) |
+| Both conditions | Fail closed if either (1) or (2) is missing |
+| Granter scope / module | Granter’s active scopes must cover every target scope (client, project, cms_instance) **and** module where applicable |
 | Recipient eligibility | Recipient account kind, employment/membership status, and contractual clearance must allow the grant |
-| Sensitive / finance | Sensitive CMS modules and finance approval bundles remain Owner / Platform Admin paths unless explicitly delegated by Owner policy |
+| Ops Manager limit (UD-03) | May delegate **routine task and project access** within existing authority only |
+| Exclusions (UD-03) | Finance, security, privileged roles (`owner`, `platform_admin`, …), and sensitive CMS access **remain excluded** from Ops Manager delegation |
 | No self-escalation | A principal cannot approve their own grant request or widen their own privileges through a second role they hold |
 | Audit | Every grant, deny, and revoke is audited with granter, recipient, and delta |
 
 **Example (illustrative boundaries only):** A manager authorised for Treasure House **website maintenance** modules must not grant access to Treasure House **pastoral records**. Holding `cms_instance` for Treasure House is insufficient without the specific module grant and contractual clearance.
 
-Operations Managers may grant client scopes **only** when §7.4 checks pass; V2.2.0’s looser wording is superseded by this section.
+V2.2.0/2.2.1 wording that allowed effective permission **or** `*.delegate` alone is **superseded** by this dual-requirement rule.
 
 ---
 
@@ -282,11 +289,11 @@ Rules:
 - Rejection requires `decision_note`  
 - All transitions audited  
 
-### 8.3 Identity-based separation of financial duties (W-C)
+### 8.3 Identity-based separation of financial duties (W-C / UD-04)
 
 | Rule | Detail |
 | --- | --- |
-| Subject | Credits, refunds, write-offs, payment exceptions, and other configured financial exception types |
+| Subject (UD-04) | Refunds; credit notes; write-offs; payment corrections; financial exceptions; approval of sensitive financial access |
 | Evaluation key | `profiles.id` (authenticated user), not role membership alone |
 | Forbidden | Same user creates/requests and later approves the same artefact via a second role |
 | Allowed | Distinct user with approval permission and scope; thresholds may still escalate to Owner |
@@ -359,7 +366,7 @@ Explicit allow-lists. Defaults:
 
 Granting access to a client CMS **instance** must **not** automatically grant every module inside it. Each module has its own view/edit/publish/no-access posture.
 
-Illustrative boundaries (**not** grants to named staff):
+Illustrative boundaries (**not** grants to named staff; **not** the definitive catalogue):
 
 | Client CMS | Module | Possible access |
 | --- | --- | --- |
@@ -371,10 +378,12 @@ Illustrative boundaries (**not** grants to named staff):
 | NiiNai | Guest bookings | No access |
 | NiiNai | Financial transactions | No access |
 
+**UD-05:** The definitive client CMS module catalogue is **deferred to V2.3**. Implementation sequencing: company CMS first, then **one** selected client pilot.
+
 | Layer | Responsibility |
 | --- | --- |
 | OkangGroup platform (V2.2) | Records intended module grants, scopes, and contractual flags; blocks unauthorised grant attempts (W-B) |
-| External CMS (V2.3) | Enforces module AuthZ at runtime in each client system |
+| External CMS (V2.3) | Enforces module AuthZ at runtime; definitive per-client module catalogues |
 
 Sensitive modules continue to require temporary_access + contractual clearance (OD-08 A). Owner cannot override a client contractual denial.
 
@@ -408,20 +417,23 @@ All Owner actions are audited like any privileged actor.
 
 ## 12. Invitation and onboarding workflows (W-E)
 
-### 12.1 Staff (OD-12 A, OD-15 R1)
+### 12.1 Staff (OD-12 A, OD-15 R1, UD-02)
 
-1. Platform Admin/Owner creates `invitations` (staff) with the **exact** approved role ids, scopes, and module grants — no implicit platform-wide privileges  
-2. Email via verified `@okanggroup.com` when configured  
-3. Accept → set password → **MFA enrolment/completion required before privileged functions** if any approved grant is privileged or `mfa_required`  
-4. On activation, system materialises **only** the invitation’s approved `role_grants` / scopes / memberships — acceptance must not widen privileges  
-5. Audit + `account_status_events`  
+1. **Only** Owner or Platform Admin issues staff `invitations` (UD-02)  
+2. Managers may **request** a staff invitation (workflow/approval) but cannot create or send invitations directly  
+3. Invitation carries the **exact** approved role ids, scopes, and module grants — no implicit platform-wide privileges  
+4. Email via verified `@okanggroup.com` when configured  
+5. Accept → set password → **MFA enrolment/completion required before privileged functions** if any approved grant is privileged or `mfa_required`  
+6. On activation, system materialises **only** the invitation’s approved grant set — acceptance must not widen privileges  
+7. Audit + `account_status_events`  
 
 | Guard | Detail |
 | --- | --- |
+| Issuer | Owner / Platform Admin only for staff invites (UD-02) |
+| Manager path | Request → authorised issuer; §7.4 still caps grant content |
 | No excess on accept | Invitation payload is the sole source of day-0 privileges |
 | Stale invitation | Expired or revoked invitations cannot activate |
 | Privileged MFA | Owner, Platform Admin, Finance, sensitive holders: MFA before protected UI/API |
-| Manager invites | If managers may invite under future policy, §7.4 still caps what the invitation may contain |
 
 ### 12.2 Client users
 
@@ -470,16 +482,23 @@ Logical menus (routes later; OD-14 A hosting). Show only if permission exists.
 
 Managers need a single operational view so delegation is usable day to day. **Every widget is filtered by the viewer’s authorised scopes** (client / department / team / project / cms module). Cross-tenant leakage is forbidden.
 
-### 15.1 Required widgets (within scope)
+### 15.1 Widget phases (UD-06)
+
+**MVP (first coded release):**
 
 | Widget | Purpose |
 | --- | --- |
 | Assigned tasks | Open work for the manager’s teams/clients |
 | Outstanding approvals | Items waiting on the manager or their delegates |
 | Overdue work | Past-due tasks and stalled approvals |
-| Workload distribution | Open task counts / deadlines by assignee (respects availability visibility) |
+| Workload distribution | Open task counts / deadlines by assignee |
+
+**Subsequent (after MVP):**
+
+| Widget | Purpose |
+| --- | --- |
+| Availability board | Configurable statuses for staff in scope (W-A / UD-01) |
 | Escalations | Escalated items and SLA breaches |
-| Availability board | Configurable statuses for staff in scope (W-A) |
 
 ### 15.2 Dashboard rules
 
@@ -505,9 +524,8 @@ UI implementation is out of scope until coding is authorised; this section is th
 | W2-04 | Which company CMS pages need Owner publish | Optional tightening |
 | W2-05 | Client Admin invite quota / verification | Abuse control |
 | W2-06 | Mapping of Hybrid CMS modules per pilot client | V2.3 + OD-13 |
-| W2-07 | Availability status catalogue and busy-policy | Configurable seeds; Owner names |
-| W2-08 | Which permission families allow manager `*.delegate` | Owner policy for W-B |
-| W2-09 | Financial exception types covered by W-C | Beyond credits/refunds |
+| W2-07 | Exact availability status seed labels | UD-01 policy recorded; display names configurable |
+| W2-08 | Exact `*.delegate` permission codes for routine task/project families | UD-03 bounds Ops Manager; code list still needed (W2-01) |
 | W2-10 | MFA grace / recovery for privileged invites | Security policy |
 
 ---
@@ -516,54 +534,74 @@ UI implementation is out of scope until coding is authorised; this section is th
 
 1. Owner reviews and accepts or amends matrices in §6–§8 and §10.3 / §15.  
 2. W2-01 permission catalogue agreed.  
-3. Proposed V2.1 amendments in §19 accepted, deferred, or rejected explicitly.  
+3. Required schema amendments in §19.1 accepted into a future V2.1 revision (or explicitly deferred).  
 4. V2.1.8A remains baseline (or a later Owner-frozen V2.1).  
-5. No coding until explicit authorisation after relevant freezes.  
+5. UD-07 / OD-04 and UD-08 resolved or explicitly waived for freeze.  
+6. No coding until explicit authorisation after relevant freezes.  
 
 ---
 
-## 18. Explicit non-goals of V2.2.1
+## 18. Explicit non-goals of V2.2.2
 
 - Modifying V2.1.8A schema text in place  
 - Freezing V2.1 or V2.2  
 - SQL migrations, RLS SQL, application UI  
 - CMS wire protocols and external AuthZ enforcement (V2.3)  
-- Closing OD-04  
-- Supabase project changes  
+- Closing OD-04 (UD-07)  
+- Supabase project / MCP account changes (UD-08)  
 - Merges to `main` or deployments  
 
 ---
 
-## 19. Proposed V2.1 amendments (not applied to V2.1.8A)
+## 19. PA classification against V2.1.8A (not applied to baseline)
 
-These are **design requirements from V2.2.1**. They must not be treated as part of the accepted V2.1.8A baseline until Owner authorises a V2.1 revision.
+Assessed against Database Architecture **V2.1.8A** only. Nothing below changes that file until a separate, authorised V2.1 amendment cycle.
 
-| ID | Proposal | Driven by | Notes |
+### 19.1 Required schema amendments
+
+| ID | Need | V2.1.8A gap | Proposed direction (design only) |
 | --- | --- | --- | --- |
-| PA-01 | Configurable staff availability status (lookup + current status per staff profile/membership) | W-A | Statuses data-driven, not hard-coded workflows |
-| PA-02 | Workload visibility support (queries/views or denormalised counters over open tasks/deadlines by assignee within scope) | W-A, W-F | May be view-only initially |
-| PA-03 | Explicit `cms_module` (or equivalent) scope / grant artefact linked to `cms_instances` | W-D | Instance grant ≠ all modules |
-| PA-04 | Delegation metadata: whether a grant may be re-delegated; optional `delegate` permission flags | W-B | Enforce granter ⊆ authority |
-| PA-05 | Approval SoD keyed by requester/creator `profile_id` vs approver `profile_id` for finance exceptions | W-C | Identity, not role-only |
-| PA-06 | Invitation payload must store exact approved roles/scopes/modules; activation applies only that set | W-E | No implicit widening |
-| PA-07 | Privileged-session gate: MFA satisfied before sensitive permission use | W-E / OD-11 | Align with existing MFA intent |
+| PA-01 | Staff operational availability | `staff_memberships.status` is employment lifecycle, not available/busy/leave; no availability field on `profiles` | Add configurable availability via `lookup_values` (or equivalent) **plus** a current status on profile or membership; support audited busy-override reason on assignment |
+| PA-03 | Module-scoped grants | `cms_modules` registry exists, but `access_scopes.scope_type` is only `platform` / `department` / `team` / `client` / `project` / `cms_instance` — **no module scope** | Extend scopes or add module-linked grant artefact so instance access ≠ all modules |
+| PA-06 | Exact invitation grant set | `invitations.role_ids` exists; **no** stored scopes/modules payload | Persist approved roles **and** scopes/modules (e.g. structured grant payload or child rows); activation applies only that set |
 
-**V2.1.8A file remains unchanged** until a separate, authorised V2.1 amendment cycle.
+### 19.2 Existing-schema capabilities
+
+| ID | Need | V2.1.8A support | Notes |
+| --- | --- | --- | --- |
+| PA-02 | Workload distribution | `tasks`, `task_assignments`, due dates; V2.1 already describes workload as application query / optional materialised view later | **No new table required** for MVP; scoped queries suffice |
+| PA-05 | Identity-based finance SoD | `approvals.requested_by` / `approver_profile_id`; OD-07 forbids same-profile self-approval; finance entities carry actor columns | Enforce UD-04 subject list in workflow rules; expand `entity_type` values via config as needed — not a new SoD table |
+| PA-07 | Privileged MFA gate | `profiles.mfa_required`, `mfa_enforced_at`; OD-11 A fail-closed privileged sessions | Auth + application session checks; **no new MFA table** required for the gate itself |
+
+### 19.3 Implementation details (policy / seeds / app logic)
+
+| ID | Need | Classification | Notes |
+| --- | --- | --- | --- |
+| PA-04 | Dual delegation rule + Ops limits | Primarily **implementation / permission seeds** | Dual check (delegate authority **and** effective coverage) is enforced in grant services using existing `permissions` / `role_grants` / `access_scopes`. Seed `*.delegate` codes for routine task/project families only (UD-03). Optional per-grant `may_redelegate` flag is **not** required for V2.2.2; raise as a future schema item only if Owner wants grant-level redelegation control |
+
+**V2.1.8A file remains unchanged.**
 
 ---
 
-## 20. Unresolved decisions
+## 20. Decisions
 
-| ID | Decision needed | Impact |
+### 20.1 Recorded in V2.2.2 (UD-01–UD-06)
+
+| ID | Decision | Status |
 | --- | --- | --- |
-| UD-01 | Final availability status codes and whether `busy` allows any new assignments | W-A assignment UX |
-| UD-02 | Which manager roles may invite staff at all (today: Platform Admin / Owner only) | W-E |
-| UD-03 | Exact `*.delegate` permission families Ops Managers may use | W-B |
-| UD-04 | Full list of financial artefact types under identity SoD | W-C |
-| UD-05 | Pilot module catalogues for Treasure House / NiiNai (illustrative only today) | W-D → V2.3 |
-| UD-06 | Dashboard widget priority / MVP cut for first coded release | W-F |
-| UD-07 | OD-04 retention (external to V2.2) | Freeze readiness |
-| UD-08 | Supabase MCP account alignment to `prbgsnxpwyepdggdysnt` | Implementation readiness |
+| UD-01 | Availability statuses are configurable. `busy` may receive additional work only with a **recorded manager override**. `on_leave` and `absent` block ordinary assignments. | **Recorded** |
+| UD-02 | Owner and Platform Admin invite staff. Managers may **request** invitations but cannot issue them directly. | **Recorded** |
+| UD-03 | Operations Managers may delegate **routine task and project access** within existing authority, subject to §7.4 dual rule. Finance, security, privileged roles, and sensitive CMS access remain excluded. | **Recorded** |
+| UD-04 | Identity SoD covers refunds, credit notes, write-offs, payment corrections, financial exceptions, and approval of sensitive financial access. | **Recorded** |
+| UD-05 | Definitive client CMS module catalogue deferred to **V2.3**. Sequence: company CMS first, then one client pilot. | **Recorded** |
+| UD-06 | Dashboard MVP: assigned tasks, outstanding approvals, overdue work, workload distribution. Availability and escalation widgets follow later. | **Recorded** |
+
+### 20.2 Still unresolved
+
+| ID | Topic | Status |
+| --- | --- | --- |
+| UD-07 | Data retention / OD-04 | **Open** — remains under V2.1 OD-04 |
+| UD-08 | Supabase MCP authentication to `okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt` | **Open** — blocked until correct account and project are accessible |
 
 ---
 
@@ -572,6 +610,7 @@ These are **design requirements from V2.2.1**. They must not be treated as part 
 | Version | Date | Notes |
 | --- | --- | --- |
 | 2.2.0 | 2026-10-11 | Initial Workflows and Permissions design; separate from V2.1.8A |
-| 2.2.1 | 2026-10-11 | W-A availability/workload; W-B strict delegation; W-C identity finance SoD; W-D module CMS permissions; W-E secure invites + MFA; W-F management dashboard; §19 proposed V2.1 amendments |
+| 2.2.1 | 2026-10-11 | W-A–W-F; §19 proposed V2.1 amendments; UD-01–UD-08 open |
+| 2.2.2 | 2026-10-11 | Dual-requirement delegation (§7.4); record UD-01–UD-06; UD-07/08 remain open; classify PA-01–PA-07 against V2.1.8A |
 
-**End of OkangGroup Workflows and Permissions Design V2.2.1 — under review. Does not modify V2.1.8A. Does not freeze V2.2. Does not authorise coding. CODING HOLD.**
+**End of OkangGroup Workflows and Permissions Design V2.2.2 — under review. Does not modify V2.1.8A. Does not freeze V2.2. Does not authorise coding. CODING HOLD.**
