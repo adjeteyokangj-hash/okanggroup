@@ -3,11 +3,12 @@
 | Field | Value |
 | --- | --- |
 | Status | **CHECKLIST REVIEWED — CODING HOLD (Option C)** |
-| Version | **1.1.0** |
+| Version | **1.1.1** |
 | Based on | Cost Plan **1.1.2**; V2.1.8A; V2.2.2; V2.3.1 |
 | Does not modify | Those baselines or the production Vite site |
+| Migration approach | **P2 approved for documentation-only preparation** (2026-10-11) — see `okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md` |
 | Coding / SQL / migrations / deploy | **HOLD** |
-| Owner decision now | **Option C** — keep coding HOLD until remaining blockers cleared, then consider Option A (freeze R1 design intent) before Option B (Milestone 1) |
+| Owner decision now | **Option C** — HOLD until P2 is accepted into a V2.1 revision and R1 acceptance criteria frozen (Option A), then consider Option B |
 
 Legend: **Ready** = design sufficient to implement when coding is authorised · **Gap** = must resolve before freeze/coding · **N/A** = not required for current slice
 
@@ -151,9 +152,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | **P1 — Thin stubs** | Apply minimal M5 (`contracts` enough for nullable FK) and M7 (registry tables only) with **no finance UI and no external CMS integration** | Small schema cost; stays inside “no R2/R3 product” if UI/integration withheld |
 | **P2 — Authorised V2.1 dependency amendment** | Redefine M6 depends on **M4 only** (defer `contract_id` FK or allow without M5); redefine M9 depends on **M3–M4–M6** (and M8 if needed) with `cms_instance_id` deferred until M7 | Cleaner R1; requires Owner-authorised V2.1 revision — **does not** rewrite V2.1.8A in this checklist |
 
-**Recommendation:** Prefer **P2** before Option A freeze (keeps R1 DB aligned with “no finance / no client CMS product”), or **P1** if Owner wants zero V2.1 text change and accepts unused stub tables.
-
-Until P1 or P2 is chosen, Release 1 migrations are **not dependency-safe**.
+**Owner choice (2026-10-11):** **P2** approved for **documentation-only preparation**. Exact amendment text is in `okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md`. **V2.1.8A is not yet amended.** Release 1 migrations remain unsafe until that proposal is accepted into an authorised V2.1 revision.
 
 ---
 
@@ -163,7 +162,7 @@ Until P1 or P2 is chosen, Release 1 migrations are **not dependency-safe**.
 
 | ID | Blocker | Severity |
 | --- | --- | --- |
-| B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **High** — choose P1 or P2 |
+| B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **High** — P2 docs prepared; **still open** until V2.1 revision accepts the proposal |
 | B2 | Owner has not frozen R1 acceptance criteria (4.2) / Option A | **High** for freeze |
 | B3 | Coding authorisation not given (0.8) | **High** for any implementation |
 | B4 | Publish mechanism not selected (2.7) | **Medium** — blocks CMS publish slice, not Milestone 1 auth |
@@ -193,8 +192,8 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | Step | Action |
 | --- | --- |
 | 1 | Keep **Option C — coding HOLD** (current) |
-| 2 | Choose migration path **P1** or **P2** (B1) |
-| 3 | When B1 + acceptance criteria agreed → **Option A** freeze Release 1 design intent |
+| 2 | Review and accept/amend the **P2 proposal** into an authorised V2.1 revision (clears B1) |
+| 3 | Freeze R1 acceptance criteria → **Option A** |
 | 4 | Separately → **Option B** authorise Milestone 1 only (Auth + M0–M2 + MFA), not full R1 |
 
 ---
@@ -204,6 +203,7 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | Version | Date | Notes |
 | --- | --- | --- |
 | 1.0.0 | 2026-10-11 | Initial checklist |
-| 1.1.0 | 2026-10-11 | Final readiness review: Ready/Gap/N/A; migration deps; PA-06; CMS publish; blockers vs deferred; Option C |
+| 1.1.0 | 2026-10-11 | Final readiness review; Option C |
+| 1.1.1 | 2026-10-11 | Owner approved P2 for docs-only prep; proposal filed; V2.1.8A unchanged |
 
-**End of checklist 1.1.0 — documentation only. Does not modify V2.1.8A / V2.2.2 / V2.3.1. CODING HOLD.**
+**End of checklist 1.1.1 — documentation only. Does not modify V2.1.8A / V2.2.2 / V2.3.1. CODING HOLD.**
