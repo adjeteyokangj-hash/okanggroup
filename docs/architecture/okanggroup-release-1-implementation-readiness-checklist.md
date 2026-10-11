@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Status | **CHECKLIST REVIEWED — CODING HOLD (Option C)** |
-| Version | **1.1.1** |
-| Based on | Cost Plan **1.1.2**; V2.1.8A; V2.2.2; V2.3.1 |
-| Does not modify | Those baselines or the production Vite site |
-| Migration approach | **P2 approved for documentation-only preparation** (2026-10-11) — see `okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md` |
+| Version | **1.1.2** |
+| Based on | Cost Plan **1.1.2**; Database **V2.1.9** (P2); preserved **V2.1.8A**; V2.2.2; V2.3.1 |
+| Does not modify | Production Vite site; coding still HOLD |
+| Migration approach | **P2 accepted into V2.1.9** with mandatory composite tenant FKs — B1 cleared at documentation level |
 | Coding / SQL / migrations / deploy | **HOLD** |
 | Owner decision now | **Option C** — HOLD until P2 is accepted into a V2.1 revision and R1 acceptance criteria frozen (Option A), then consider Option B |
 
@@ -38,8 +38,8 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | 1.3 | Roles, permissions, grants, scopes | V2.1.8A M2 | **Ready** | Seeds + helpers required with table |
 | 1.4 | Departments, teams, memberships | V2.1.8A M3 | **Ready** | Org ≠ privilege ladder (V2.2.2) |
 | 1.5 | Clients directory | V2.1.8A M4 | **Ready** | Tenant root rules §3.3 |
-| 1.6 | Projects | V2.1.8A M6 | **Gap** | **Written depends on M4–M5**; `projects.contract_id` → `contracts`. Cannot skip M5 under current V2.1.8A text without an authorised dependency amendment or a thin M5 contracts stub |
-| 1.7 | Tasks, assignments, approvals | V2.1.8A M9 | **Gap** | **Written depends on M3–M7**; optional `tasks.cms_instance_id` → `cms_instances`. Cannot skip M7 under current text without amendment or thin M7 registry (not external integration) |
+| 1.6 | Projects | V2.1.9 M6 | **Ready** | P2: M6 depends on M4; `contract_id` deferred to M5 with composite FK |
+| 1.7 | Tasks, assignments, approvals | V2.1.9 M9 | **Ready** | P2: M9 depends on M3–M4–M6; `cms_instance_id` deferred to M7 with composite FK |
 | 1.8 | Company CMS | V2.1.8A M8, Domain 7 | **Ready** | M8 depends on **M2 only** — OK for R1; publish path §2 |
 | 1.9 | Audit events (core) | V2.1.8A M14 | **Ready** | Core `audit_events` usable; full retention governance tables may ship with M14 but purge stays off (DR-07) |
 | 1.10 | Lookups / workflows seeds | V2.1.8A M15 | **Ready** | Minimal seeds |
@@ -152,7 +152,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 | **P1 — Thin stubs** | Apply minimal M5 (`contracts` enough for nullable FK) and M7 (registry tables only) with **no finance UI and no external CMS integration** | Small schema cost; stays inside “no R2/R3 product” if UI/integration withheld |
 | **P2 — Authorised V2.1 dependency amendment** | Redefine M6 depends on **M4 only** (defer `contract_id` FK or allow without M5); redefine M9 depends on **M3–M4–M6** (and M8 if needed) with `cms_instance_id` deferred until M7 | Cleaner R1; requires Owner-authorised V2.1 revision — **does not** rewrite V2.1.8A in this checklist |
 
-**Owner choice (2026-10-11):** **P2** approved for **documentation-only preparation**. Exact amendment text is in `okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md`. **V2.1.8A is not yet amended.** Release 1 migrations remain unsafe until that proposal is accepted into an authorised V2.1 revision.
+**Owner choice:** **P2** with mandatory composite tenant FKs — embodied in **V2.1.9**. Preserved baseline: `okanggroup-database-v2.1.8A.md`. R1 migration order is dependency-safe **in design**; no SQL applied.
 
 ---
 
@@ -162,7 +162,7 @@ Legend: **Ready** = design sufficient to implement when coding is authorised · 
 
 | ID | Blocker | Severity |
 | --- | --- | --- |
-| B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **High** — P2 docs prepared; **still open** until V2.1 revision accepts the proposal |
+| B1 | M6↔M5 and M9↔M7 dependency conflict with R1 exclusions (§6) | **Resolved (docs)** — V2.1.9 P2 + composite tenant FKs; no migrations applied |
 | B2 | Owner has not frozen R1 acceptance criteria (4.2) / Option A | **High** for freeze |
 | B3 | Coding authorisation not given (0.8) | **High** for any implementation |
 | B4 | Publish mechanism not selected (2.7) | **Medium** — blocks CMS publish slice, not Milestone 1 auth |
@@ -192,8 +192,8 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | Step | Action |
 | --- | --- |
 | 1 | Keep **Option C — coding HOLD** (current) |
-| 2 | Review and accept/amend the **P2 proposal** into an authorised V2.1 revision (clears B1) |
-| 3 | Freeze R1 acceptance criteria → **Option A** |
+| 2 | ~~Accept P2 into V2.1~~ **Done (V2.1.9 docs)** — B1 cleared at documentation level |
+| 3 | Freeze R1 acceptance criteria → **Option A** (not yet) |
 | 4 | Separately → **Option B** authorise Milestone 1 only (Auth + M0–M2 + MFA), not full R1 |
 
 ---
@@ -204,6 +204,7 @@ Finance UI, subscriptions, PA-01, external CMS, PA-03, PA-I*, Pilot 2, OD-04 pur
 | --- | --- | --- |
 | 1.0.0 | 2026-10-11 | Initial checklist |
 | 1.1.0 | 2026-10-11 | Final readiness review; Option C |
-| 1.1.1 | 2026-10-11 | Owner approved P2 for docs-only prep; proposal filed; V2.1.8A unchanged |
+| 1.1.1 | 2026-10-11 | Owner approved P2 for docs-only prep; proposal filed |
+| 1.1.2 | 2026-10-11 | P2 accepted into V2.1.9 with composite FKs; B1 resolved at docs level; coding HOLD |
 
-**End of checklist 1.1.1 — documentation only. Does not modify V2.1.8A / V2.2.2 / V2.3.1. CODING HOLD.**
+**End of checklist 1.1.2 — documentation only. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD.**

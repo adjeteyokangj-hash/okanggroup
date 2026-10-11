@@ -2,12 +2,13 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **PROPOSAL — DOCUMENTATION ONLY — AWAITING OWNER ACCEPTANCE INTO A FUTURE V2.1 REVISION** |
-| Version | **1.0.0** |
-| Owner instruction | 2026-10-11: “Approve P2 for documentation-only preparation. Keep coding and migrations on HOLD.” |
-| Does **not** modify | **V2.1.8A** (accepted baseline remains unchanged until a separate authorised revision) |
+| Status | **ACCEPTED INTO DOCUMENTATION REVISION V2.1.9 — NOT FROZEN — CODING HOLD** |
+| Version | **1.1.0** |
+| Owner instructions | (1) Approve P2 for docs-only prep. (2) “Approve P2 with mandatory composite tenant foreign keys. Authorise a documentation-only V2.1 revision. Keep coding, SQL, migrations and deployment on HOLD.” |
+| Working revision | [okanggroup-database-v2.1.md](./okanggroup-database-v2.1.md) **V2.1.9** |
+| Preserved baseline | [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md) |
 | Does not authorise | Coding, SQL, migrations, RLS application, or deployment |
-| Related | Release 1 Checklist 1.1.0 blocker B1; Cost Plan 1.1.2 DR-03 / DR-05 |
+| Related | Release 1 Checklist blocker B1; Cost Plan 1.1.2 DR-03 / DR-05 |
 
 ---
 
@@ -60,7 +61,7 @@ M0 → M1 → M2 → M3 → M4 → M6 → M8 → M9 → M14 (core) → M15 (mini
 | Phase | Rule |
 | --- | --- |
 | **Release 1 (M6 under P2)** | Do **not** create `contract_id` or any FK to `contracts`. Projects stand alone under `client_id`. |
-| **Release 2 (with M5)** | Add nullable `contract_id uuid NULL` **without** FK first (or in same migration after `contracts` exists). Then add `FOREIGN KEY (contract_id) REFERENCES contracts(id)` **or** composite `(client_id, contract_id) → contracts(client_id, id)` per V2.1 tenant rules — only when both sides exist. |
+| **Release 2 (with M5)** | Add nullable `contract_id uuid NULL` after `contracts` exists with ordinary `UNIQUE (client_id, id)`. Then add **only** the composite FK `(client_id, contract_id) → contracts (client_id, id)`. Single-column `contract_id → contracts(id)` is **forbidden**. |
 | **Data safety** | All existing R1 project rows have `contract_id` NULL after the column is added → FK validate succeeds. No backfill required. |
 | **App rule until then** | No UI/API field for linking projects to contracts in R1. |
 
@@ -155,5 +156,6 @@ Owner accepts this proposal into an authorised V2.1 revision when:
 | Version | Date | Notes |
 | --- | --- | --- |
 | 1.0.0 | 2026-10-11 | P2 documentation-only preparation per Owner approval |
+| 1.1.0 | 2026-10-11 | Mandatory composite tenant FKs; accepted into V2.1.9 docs revision; 2.1.8A preserved |
 
-**End of P2 proposal 1.0.0 — does not modify V2.1.8A. CODING AND MIGRATIONS HOLD.**
+**End of P2 proposal 1.1.0 — embodied in V2.1.9. V2.1.8A preserved. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD.**

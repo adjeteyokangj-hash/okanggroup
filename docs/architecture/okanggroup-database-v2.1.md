@@ -3,9 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
-| Document version | **2.1.8A** |
+| Document version | **2.1.9** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
-| Working baseline | V2.1.8 A1–A3 retained; **2.1.8A** corrects A1 FK targets to ordinary (non-partial) `UNIQUE (client_id, id)` — **OD-04 still open**; architecture **not frozen** |
+| Prior baseline (comparison) | [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md) — preserved accepted baseline |
+| Working baseline | **2.1.9** = 2.1.8A + **P2** Release 1 dependency amendment only (M6/M9 deps; deferred `contract_id` / `cms_instance_id`; mandatory composite tenant FKs when those links are added). **OD-04 still open**. Architecture **not frozen**. No coding/migrations authorised. |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -228,10 +229,11 @@ Every client-scoped table must include `client_id` (denormalised where needed fo
 | `cms_modules`, `cms_connections`, `cms_migrations` | `(client_id, cms_instance_id) → cms_instances (client_id, id)` |
 | `subscriptions` (optional cms link) | `(client_id, cms_instance_id) → cms_instances (client_id, id)` when cms set |
 | `invoices` → contract/subscription | `(client_id, contract_id) → contracts`; `(client_id, subscription_id) → subscriptions` when set |
+| `projects` → contract (**from M5 / R2 onward**, P2) | `(client_id, contract_id) → contracts (client_id, id)` when `contract_id` set — **never** single-column `contract_id → contracts(id)` |
 | `invoice_lines` | `(client_id, invoice_id) → invoices` (denormalise `client_id` onto lines) |
 | `payment_records`, `credit_notes`, `refunds` | `(client_id, invoice_id) → invoices` when invoice set |
 | `ticket_messages` | `(client_id, ticket_id) → tickets` |
-| Client-linked `tasks` | `(client_id, project_id)` / `(client_id, cms_instance_id)` when those parents set; **not** used when task is internal (`client_id` NULL) |
+| Client-linked `tasks` | `(client_id, project_id)` when `project_id` set; **from M7 onward** also `(client_id, cms_instance_id)` when `cms_instance_id` set (P2 — column omitted in R1 M9); **not** used when task is internal (`client_id` NULL) |
 | Client-linked `health_checks` / `alerts` | `(client_id, monitored_service_id) → monitored_services` when the service row is client-scoped (`client_id` NOT NULL on both sides) |
 
 **Bypass prohibition:** No single-column FK to a tenant parent’s `id` alone is sufficient for client-scoped data. A lone `project_id → projects(id)` without matching `client_id` is **forbidden** on client-scoped children.
@@ -678,12 +680,13 @@ Also **`UNIQUE (client_id, id)`**.
 | `category` | `text` | NOT NULL (lookup / configurable) |
 | `stage` | `text` | NOT NULL (workflow-driven) |
 | `status` | `text` | NOT NULL DEFAULT `open` (`open`, `on_hold`, `cancelled`, `closed`) |
-| `contract_id` | `uuid` | NULL FK → `contracts` |
 | `budget_amount` | `numeric(18,2)` | NULL |
 | `budget_currency` | `char(3)` | NULL |
 | `starts_on` / `target_end_on` | `date` | NULL |
 | `summary` | `text` | NULL |
 | … | | |
+
+**P2 / V2.1.9 — deferred column:** `contract_id` is **omitted** from Release 1 (M6). It is introduced with M5 / Release 2 as nullable `contract_id uuid NULL`, then bound only by a **mandatory composite tenant FK** `FOREIGN KEY (client_id, contract_id) REFERENCES contracts (client_id, id)` when set. A single-column FK to `contracts(id)` alone is **forbidden**. See [§10.1](#101-p2-deferred-tenant-links-release-1).
 
 UNIQUE (`client_id`, `code`). Also `UNIQUE (client_id, id)` to support composite tenant FKs from children (§3.3.1).
 
@@ -887,7 +890,6 @@ Publishing rules: draft → review → publish; restore from `cms_revisions`. Ex
 | `id` | `uuid` | PK |
 | `client_id` | `uuid` | NULL FK → `clients` |
 | `project_id` | `uuid` | NULL FK → `projects` |
-| `cms_instance_id` | `uuid` | NULL FK → `cms_instances` |
 | `title` | `text` | NOT NULL |
 | `description` | `text` | NULL |
 | `priority` | `text` | NOT NULL (lookup) |
@@ -899,7 +901,9 @@ Publishing rules: draft → review → publish; restore from `cms_revisions`. Ex
 | `verification_status` | `text` | NULL (`unverified`, `verified`, `rejected`) |
 | … | | |
 
-**OD-06 R1:** Internal company tasks use `is_internal = true` with `client_id IS NULL` (§3.3.2)—no fictional client. Client-linked tasks require `client_id` and optional composite parent FKs.
+**OD-06 R1:** Internal company tasks use `is_internal = true` with `client_id IS NULL` (§3.3.2)—no fictional client. Client-linked tasks require `client_id` and optional composite parent FKs to `projects` when `project_id` is set.
+
+**P2 / V2.1.9 — deferred column:** `cms_instance_id` is **omitted** from Release 1 (M9). It is introduced with M7 as nullable `cms_instance_id uuid NULL`, then bound only by a **mandatory composite tenant FK** `FOREIGN KEY (client_id, cms_instance_id) REFERENCES cms_instances (client_id, id)` when set. A single-column FK to `cms_instances(id)` alone is **forbidden**. Parent `cms_instances` retains ordinary non-partial `UNIQUE (client_id, id)` (V2.1.8A). See [§10.1](#101-p2-deferred-tenant-links-release-1).
 
 #### `task_assignments`
 
@@ -1716,11 +1720,11 @@ Migrations are named for future implementation. **None are applied in this phase
 | M2 | M1 | Permissions domain tables; seed system permissions/roles; **core `private.*` predicates** + EXECUTE grants | RLS on grant tables; helpers usable by later policies |
 | M3 | M1–M2 | `departments`, `teams`, `job_titles`, `staff_memberships` | RLS for org tables |
 | M4 | M2 | **Tenant root** `clients` (PK `id` only — no `UNIQUE (client_id, id)` on root); plus `client_contacts`, `client_memberships`, `client_services` with `client_id → clients(id)` and `UNIQUE (client_id, id)` on those **child** parents that will be composite-FK targets (§3.3.1.1) | RLS + tenant isolation for client directory |
-| M5 | M4 | `service_plans`, `tax_profiles`, `tax_profile_rates`, quotations, contracts, subscriptions, invoices, lines; `UNIQUE (client_id, id)` on client-scoped commercial parents + composite tenant FKs | RLS for commercial tables (`finance.*`) |
-| M6 | M4–M5 | Projects + children; `UNIQUE (client_id, id)` + composite FKs | RLS for project tables |
-| M7 | M4 | CMS registry tables; composite FKs; credential_ref isolation constraints | RLS for registry; no secret plaintext; deny cross-client CMS links |
+| M5 | M4 | `service_plans`, `tax_profiles`, `tax_profile_rates`, quotations, contracts, subscriptions, invoices, lines; `UNIQUE (client_id, id)` on client-scoped commercial parents + composite tenant FKs; **also** add deferred `projects.contract_id` + composite FK per §10.1 | RLS for commercial tables (`finance.*`) |
+| M6 | **M4** (P2; was M4–M5) | Projects + children; `UNIQUE (client_id, id)` + composite FKs; **no** `contract_id` column in this tranche | RLS for project tables |
+| M7 | M4 | CMS registry tables; composite FKs; credential_ref isolation constraints; **also** add deferred `tasks.cms_instance_id` + composite FK per §10.1 | RLS for registry; no secret plaintext; deny cross-client CMS links |
 | M8 | M2 | Company CMS tables + `contact_enquiries` | RLS for company CMS; public insert path for enquiries carefully scoped |
-| M9 | M3–M7 | Tasks, assignments, dependencies, approvals; composite FKs when client-linked | RLS for operations |
+| M9 | **M3–M4–M6** (P2; was M3–M7) | Tasks, assignments, dependencies, approvals; composite FKs to clients/projects when set; **no** `cms_instance_id` column in this tranche | RLS for operations |
 | M10 | M5 | Payments, credit notes, refunds, expenses, `fx_rates` | RLS for payments; immutable financial history rules |
 | M11 | M4 | Tickets, messages, incidents; composite FKs | RLS + internal vs client_visible message split |
 | M12 | M4–M7 | Monitoring tables | RLS; probes write via service role only |
@@ -1736,15 +1740,56 @@ Mapping to V2.0 delivery phases:
 | 1 Database foundation & auth | M0–M2 (including private helpers + identity RLS) |
 | 2 Roles, departments, staff | M2–M3 |
 | 3 Owner dashboard | reads from secured tables (views later) |
-| 4 Clients & projects | M4–M6 |
+| 4 Clients & projects | M4 + M6 (P2: not M5) |
 | 5 Company CMS | M8 |
-| 6 Client CMS framework | M7 (+ V2.3 external AuthZ) |
-| 7 Work allocation | M9 |
-| 8 Finance & subscriptions | M5, M10 |
+| 6 Client CMS framework | M7 (+ V2.3 external AuthZ); adds deferred `tasks.cms_instance_id` (P2) |
+| 7 Work allocation | M9 after M6 (P2: not after M7) |
+| 8 Finance & subscriptions | M5, M10; M5 also adds deferred `projects.contract_id` (P2) |
 | 9 Support & monitoring | M11–M12 |
 | 10 Reports, config, audit | M13–M15 |
 | 11 CMS integration pilot | M7 data + external systems under §6.5 |
 | 12 Security testing | M16 hardening + cross-tenant negative tests |
+
+### 10.1 P2 deferred tenant links (Release 1)
+
+**Authorisation:** Owner approved P2 with mandatory composite tenant foreign keys (2026-10-11). Proposal: [okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md](./okanggroup-v2.1-r1-dependency-amendment-p2-proposal.md). Comparison baseline: [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md).
+
+#### 10.1.1 Release 1 migration order (design)
+
+```text
+M0 → M1 → M2 → M3 → M4 → M6 → M8 → M9 → M14 (core) → M15 (minimal)
+```
+
+M5 and M7 are **not** required for Release 1. No coding or migrations are authorised by this section.
+
+#### 10.1.2 Deferred columns
+
+| Child | Column | Omitted in | Introduced with | Immediate rule after add |
+| --- | --- | --- | --- | --- |
+| `projects` | `contract_id` | M6 / R1 | M5 / Release 2 | Nullable; then **composite** FK only |
+| `tasks` | `cms_instance_id` | M9 / R1 | M7 / Release 3 (default) | Nullable; then **composite** FK only |
+
+#### 10.1.3 Mandatory composite tenant FKs (when links are added)
+
+| Link | Required FK | Forbidden |
+| --- | --- | --- |
+| Project → contract | `FOREIGN KEY (client_id, contract_id) REFERENCES contracts (client_id, id)` when `contract_id` IS NOT NULL | `FOREIGN KEY (contract_id) REFERENCES contracts (id)` alone |
+| Task → CMS instance | `FOREIGN KEY (client_id, cms_instance_id) REFERENCES cms_instances (client_id, id)` when `cms_instance_id` IS NOT NULL | `FOREIGN KEY (cms_instance_id) REFERENCES cms_instances (id)` alone |
+
+Parent tables **must** retain ordinary, non-partial `UNIQUE (client_id, id)` as established in V2.1.8A (§3.3.1) so these composite FKs are valid PostgreSQL references.
+
+#### 10.1.4 Safe future introduction procedure
+
+1. Create parent tables (M5 or M7) with constraints, RLS, and policies in the same tranche (§3.10).  
+2. Ensure parent has ordinary `UNIQUE (client_id, id)`.  
+3. Add nullable column on the child (`contract_id` / `cms_instance_id`).  
+4. Leave existing rows NULL (default). Backfill only if a verified business need exists.  
+5. Verify zero orphan references: no child row with non-null FK ids pointing at a missing or cross-tenant parent.  
+6. Add the **composite** FK (optional `NOT VALID` then `VALIDATE` pattern permitted).  
+7. Only then enable application writes to those columns.  
+8. Do not rewrite historical `client_id`.
+
+Existing Release 1 projects and tasks remain valid after the column/FK is added because new columns are NULL.
 
 ---
 
@@ -1785,7 +1830,8 @@ Before any production migration apply:
 | 2.1.7 | 2026-10-11 | Retention refinements: record-type (not only table) rules; policy owner/version/review governance; deletion reversible only pre-execution; UK/Ghana legal verification checklist. Periods unchanged. **OD-04 open. Legal verification not claimed. Not frozen.** |
 | 2.1.7-R | 2026-10-11 | Companion technical readiness report for §16.8 checks. OD-04 still open; Supabase MCP unresolved; freeze not authorised |
 | 2.1.8 | 2026-10-11 | Documentation amendments A1 (exhaustive composite parents/FKs), A2 (M4 tenant-root wording), A3 (tax + retention/deletion governance inventory). OD-04 remains OPEN. Not frozen |
-| 2.1.8A | 2026-10-11 | A1 correction: composite FKs must reference ordinary non-partial `UNIQUE (client_id, id)`; remove partial-unique-as-FK-target guidance. OD-04 OPEN. Not frozen |
+| 2.1.8A | 2026-10-11 | A1 correction: composite FKs must reference ordinary non-partial `UNIQUE (client_id, id)`; remove partial-unique-as-FK-target guidance. OD-04 OPEN. Not frozen. **Preserved** at [okanggroup-database-v2.1.8A.md](./okanggroup-database-v2.1.8A.md) |
+| 2.1.9 | 2026-10-11 | **P2 only:** M6 depends on M4; M9 depends on M3–M4–M6; defer `projects.contract_id` and `tasks.cms_instance_id`; safe add-later procedure; **mandatory composite tenant FKs** when those links are introduced. OD-04 OPEN. Not frozen. Coding/migrations HOLD |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -2346,4 +2392,4 @@ When counsel answers are received, update a new architecture revision that:
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.8A — under review on branch `docs/architecture-v2.1-review`. A1 corrected for PostgreSQL FK rules. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.9 — under review on branch `docs/architecture-v2.1-review`. P2 Release 1 dependency amendment applied (documentation only). V2.1.8A preserved for comparison. NOT FROZEN. OD-04 OPEN. CODING, SQL, MIGRATIONS AND DEPLOYMENT HOLD remains in effect.**
