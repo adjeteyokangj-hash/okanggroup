@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
-| Document version | **2.1.6** |
+| Document version | **2.1.7** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
-| Working baseline | V2.1.5 decisions retained; V2.1.6 adds **proposed** OD-04 retention design (§16) — **not approved** |
+| Working baseline | V2.1.6 retention periods preserved; V2.1.7 refines §16 (record-type rules, policy governance, deletion irreversibility, legal checklist) — **OD-04 still open** |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -16,8 +16,9 @@
 | Public website | Existing Vite site preserved; no framework rewrite required by this contract |
 | Phase-1 architecture decisions | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (**preserved**) |
 | Business decisions recorded | See §14.5 (OD-04 still pending) |
-| Still open | **OD-04** — proposed schedule in §16; legal verification required; **not approved / not closed** |
+| Still open | **OD-04** — §16 proposed; **legal verification not completed**; not approved / not closed |
 | Architecture frozen | **No** |
+| Legal verification claimed | **No** — checklist in §16.9 only |
 
 ---
 
@@ -1604,7 +1605,8 @@ Before any production migration apply:
 | 2.1.3 | 2026-10-11 | Owner review amendments: RLS-per-migration; cross-client composite FKs; audit/actor survival; private privilege contract; external CMS AuthZ boundary (§6.5); Open Decisions register cleanup |
 | 2.1.4 | 2026-10-11 | Final design refinements: private EXECUTE vs schema/Data API (§5.1.2); nullable/internal/immutable tenancy (§3.3.2); audit retention pending OD-04 (§3.9.1); §14.4 option catalogue |
 | 2.1.5 | 2026-10-11 | Recorded business decisions (§14.5) with OD-03/07/17 amendments; OD-04 pending durations; business rules A/B/C. Architecture decisions OD-02/05/08/11/12/14 A preserved |
-| 2.1.6 | 2026-10-11 | Proposed OD-04 retention schedule, triggers, legal holds, deletion/backup controls (§16). **OD-04 not approved/not closed. V2.1 not frozen.** |
+| 2.1.6 | 2026-10-11 | Proposed OD-04 retention schedule, triggers, legal holds, deletion/backup controls (§16). OD-04 not approved/not closed |
+| 2.1.7 | 2026-10-11 | Retention refinements: record-type (not only table) rules; policy owner/version/review governance; deletion reversible only pre-execution; UK/Ghana legal verification checklist. Periods unchanged. **OD-04 open. Legal verification not claimed. Not frozen.** |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -1629,7 +1631,7 @@ Before any production migration apply:
 
 **Git status note:** Published on dedicated review branch `docs/architecture-v2.1-review`. Must not merge to production/default until Owner freezes V2.1. Coding HOLD; no migrations.
 
-**Recommended specification sequence (Owner):** Review/approve OD-04 (§16) with legal input → §16.7 technical checks → consider V2.1 freeze → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
+**Recommended specification sequence (Owner):** Complete §16.9 legal verification → approve OD-04 → §16.8 technical checks → consider V2.1 freeze → V2.2 → V2.3 → V2.4 → coding authorisation.
 
 ---
 
@@ -1644,7 +1646,7 @@ Cursor must not invent answers for these. Owner (or designated officer) decides 
 | OD-01 | Payment provider | **Recorded R1** | Manual payments initially; provider fields reserved — §14.5 |
 | OD-02 | Private schema for helpers | **Recorded A** | See §14.3; privilege model §5.1.1–§5.1.2 |
 | OD-03 | Tax and rounding | **Recorded R1-amended** | Jurisdiction, effective dates, exemptions, invoice tax snapshots — §3.4, §14.5 |
-| OD-04 | Retention | **Open — proposed schedule §16** | Not approved; legal verification required — §16, §14.5 |
+| OD-04 | Retention | **Open — §16 proposed (V2.1.7 refined)** | Not approved; legal verification **not completed** — §16.9 |
 | OD-05 | Permission catalogue mutability | **Recorded A** | See §14.3 — Configuration Studio limits |
 | OD-06 | Internal tasks without client | **Recorded R1** | Internal tasks allowed; no fictional client — §3.3.2, §14.5 |
 | OD-07 | Credit/refund approval thresholds | **Recorded R1-amended** | Configurable thresholds; requester ≠ approver — §14.5 |
@@ -1946,8 +1948,9 @@ These decisions do **not** authorise SQL migrations, application code, merge to 
 - [x] Business decisions recorded in §14.5 (V2.1.5)
 - [x] Business rules A/B/C recorded
 - [x] **OD-04:** proposed retention design published in §16 (V2.1.6) — **not approved**
-- [ ] **OD-04:** Owner + legal review of periods / UK–Ghana requirements; approve or amend schedule
-- [ ] Final technical checks (§16.7) after OD-04 agreement
+- [x] **OD-04:** V2.1.7 refinements (record-type, governance, deletion irreversibility, legal checklist) — **still not approved**
+- [ ] **OD-04:** Complete §16.9 legal verification; Owner approves or amends schedule
+- [ ] Final technical checks (§16.8) after OD-04 agreement
 - [ ] Freeze V2.1 explicitly (not done)
 - [ ] Authorise a future coding phase explicitly (not done)
 
@@ -1958,9 +1961,25 @@ These decisions do **not** authorise SQL migrations, application code, merge to 
 | Field | Value |
 | --- | --- |
 | Status | **PROPOSED — NOT APPROVED — OD-04 REMAINS OPEN** |
+| Document revision | V2.1.7 refinements applied; **periods unchanged from V2.1.6** |
 | Authority | Design input for Owner / legal review only |
-| Disclaimer | Periods below are **operational starting proposals**, not a verified statement that each category has that exact statutory retention obligation in the UK or Ghana |
+| Legal verification | **NOT COMPLETED** — do not treat any period as a confirmed statutory minimum |
+| Disclaimer | Periods are **operational planning assumptions**. They are **not** verified UK or Ghanaian statutory requirements unless later marked verified after §16.9 |
 | Coding | **HOLD** — no purge jobs, migrations, or production changes authorised by this section |
+
+### 16.0 Retention basis classes (must be distinguished)
+
+Every retained row must eventually be classifiable under one or more of:
+
+| Basis class | Meaning |
+| --- | --- |
+| **Statutory** | Minimum period required by applicable law (UK and/or Ghana) — **unverified until §16.9** |
+| **Contractual** | Period required by OkangGroup↔client (or staff) agreement |
+| **Operational** | Legitimate business need beyond statute/contract (security, support quality, Free-tier hygiene) |
+| **Legal hold** | Suspends purge for a defined matter regardless of schedule |
+| **Client-controlled** | Client instructions for client-owned / client-media data (does not auto-inherit OkangGroup internal schedule) |
+
+Where bases conflict, the **longest mandatory** period among statutory, contractual, and active legal hold wins. Operational periods must not be used to justify keeping PII without a documented need.
 
 ### 16.1 Scope and separation of schedules
 
@@ -1970,74 +1989,108 @@ These decisions do **not** authorise SQL migrations, application code, merge to 
 | **Client contractual / legal schedule** | Client-owned operational content, client media, external CMS data OkangGroup processes under contract | Must **not** automatically inherit OkangGroup’s internal periods; driven by client instructions + applicable law + contract |
 | **Hybrid rows** | Platform records that contain client PII (e.g. ticket messages, contacts) | Use the **longer** of: platform category period, contractual obligation, or mandatory legal retention; never purge while a legal hold applies |
 
-Cross-border context (OD-16 R1): platform database in London (`eu-west-2`); UK and Ghanaian data-protection and recordkeeping rules must be considered. **Qualified legal advice is required before approving durations.**
+Cross-border context (OD-16 R1): platform database in London (`eu-west-2`); UK and Ghanaian data-protection and recordkeeping rules must be considered. **Qualified legal advice is required before approving durations. This document does not claim that advice has been obtained.**
 
-### 16.2 Proposed retention schedule (starting policy)
+### 16.1.1 Retention by record type (not only by table) — Amendment A
 
-| Category ID | Data category | Primary tables / stores (indicative) | Retention start trigger | Proposed retention | Action after expiry | Indicative legal / policy basis | Verification flag |
+A database table is **not** a sufficient retention unit. Rows in the same table may carry different sensitivity and different clocks.
+
+| Requirement | Design rule |
+| --- | --- |
+| Record-type tag | Purge-eligible entities carry `retention_record_type` (or equivalent) in addition to category ID — e.g. support: `technical_routine` vs `contains_sensitive_pii` vs `legal_dispute_related` |
+| Sub-period rules | Within a category, sensitive subtypes may require **longer** retention, earlier anonymisation, or approval-gated delete even when the category default allows automated purge |
+| Staff records | RET-STAFF is a **family**, not one blob: payroll/tax evidence, performance notes, access credentials, and contact details may have **different** retain/delete rules after employment ends (record-specific review required — **VERIFY-UK-GH**) |
+| Client CRM | RET-CLIENT must separate **necessary commercial identity** (legal name, billing entity) from **unnecessary contact PII** eligible for earlier deletion after relationship end |
+| Support | Ordinary technical tickets may follow the 3-year operational default; tickets flagged with sensitive personal data or contractual exceptions follow extended/hold paths |
+| Evaluation order | 1) legal hold → 2) statutory minimum (when verified) → 3) contractual → 4) record-type subtype → 5) category default operational period |
+
+### 16.2 Proposed retention schedule (starting policy — periods preserved)
+
+**All periods below remain LEGALLY UNVERIFIED** unless a future revision explicitly marks a row `VERIFIED` after §16.9. V2.1.7 does **not** change the proposed durations.
+
+| Category ID | Data category | Primary tables / stores (indicative) | Retention start trigger | Proposed retention (**UNVERIFIED**) | Action after expiry | Basis class (provisional) | Verification flag |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| RET-FIN | Accounting records, invoices, payments | `invoices`, `invoice_lines`, `payment_records`, `credit_notes`, `refunds`, `fx_rates` (linked), related Storage | End of relevant financial period / tax year of the record | **6 years** after that period | Secure deletion, subject to overriding legal requirements | Often aligned with UK company/tax recordkeeping practice (commonly cited ~6 years); Ghana Companies/tax record rules may differ | **VERIFY-UK-GH** — confirm against current UK HMRC/Companies Act practice and Ghana Revenue Authority / Companies Act obligations |
-| RET-CON | Contracts and commercial agreements | `contracts`, contract Storage objects, linked quotations once executed | Contract termination / expiry date | **6 years** after termination | Review then securely delete (unless hold or FIN overlap) | Limitation periods / commercial dispute readiness; not purely privacy-driven | **VERIFY-UK-GH** — limitation periods and sector contracts |
-| RET-AUD | Security audit logs | `audit_events`, `security_incidents` | `created_at` / incident closed_at (policy choice: use created_at unless incident open) | **2 years** | Delete or pseudonymise actor snapshots; may retain non-PII action metadata if justified | UK GDPR storage limitation / security monitoring legitimate interests; Ghana Data Protection Act 2012 principles | **VERIFY-UK-GH** — whether security logs need longer for certain incident classes |
-| RET-ACC | Administrative access history | `access_reviews`, privileged grant history snapshots, session-related audit subset | Review/`created_at` | **2 years** | Delete or pseudonymise | Access governance / GDPR storage limitation | **VERIFY** — align with RET-AUD |
-| RET-STAFF | Staff account records | `profiles` (staff), `staff_memberships`, `account_status_events`, HR-adjacent fields | End of employment / offboard date | Employment period **+ 6 years** | Retain only necessary records; delete surplus PII | Employment/tax/limitation practice (UK often multi-year post-employment); Ghana employment record rules | **VERIFY-UK-GH** — employment law + payroll retention |
-| RET-CLIENT | Client account records (platform CRM) | `clients`, `client_contacts`, `client_memberships` (platform directory) | End of contract / archive date | Contract period **+ 6 years** | Delete unnecessary personal data; keep FIN/CON as required | Business relationship + limitation; GDPR minimisation after end of relationship | **VERIFY** — separate from client-owned CMS content |
-| RET-SUP | Support tickets | `tickets`, `ticket_messages`, support Storage | Ticket `closed` timestamp | **3 years** after closure | Delete or anonymise | Customer support / dispute window; GDPR storage limitation | **VERIFY** — regulated clients may require longer by contract |
-| RET-MON | Monitoring history | `health_checks`, resolved `alerts` detail | `checked_at` / alert resolved_at | **90 days** | Automatically purge | Operational telemetry; Free-tier volume control | Low statutory risk; confirm no contractual SLA evidence needs longer |
-| RET-NOTIF | System notifications | `notifications`, `delivery_attempts` | `created_at` | **90 days** | Automatically purge | Transient ops messaging | Low statutory risk |
-| RET-TEMP | Temporary access grants | `temporary_access` | Grant `ends_at` / `revoked_at` | **2 years** after expiry | Remove unnecessary personal information; keep minimal audit trail via RET-AUD if logged | Security accountability | Align with RET-AUD |
-| RET-CMS-PUB | CMS publishing history (company CMS) | `cms_revisions`, publish audit links | While OkangGroup company site service active; offboarding clock on decommission | Active service, then contractual/offboarding rules | Export or delete during offboarding | Business continuity for okanggroup.com | Confirm backup/export before delete |
-| RET-CLIENT-MEDIA | Client media and documents | `client-documents` Storage, project_documents client_visible/internal per contract | Per **client contract** / instruction | **Contractual retention period** (not OkangGroup default) | Export then securely delete when authorised | Client instructions + applicable law; must not auto-adopt RET-FIN/RET-CLIENT alone | **CLIENT-SPECIFIC** — mandatory per-client schedule field |
+| RET-FIN | Accounting records, invoices, payments | `invoices`, `invoice_lines`, `payment_records`, `credit_notes`, `refunds`, `fx_rates` (linked), related Storage | End of relevant financial period / tax year of the record | **6 years** after that period | Secure deletion, subject to overriding legal requirements | Likely statutory + operational | **UNVERIFIED / VERIFY-UK-GH** |
+| RET-CON | Contracts and commercial agreements | `contracts`, contract Storage objects, linked quotations once executed | Contract termination / expiry date | **6 years** after termination | Review then securely delete (unless hold or FIN overlap) | Likely contractual + limitation/operational | **UNVERIFIED / VERIFY-UK-GH** — confirm by contract type |
+| RET-AUD | Security audit logs | `audit_events`, `security_incidents` | `created_at` (unless incident still open) | **2 years** | Delete or pseudonymise actor snapshots; may retain non-PII action metadata if justified | Operational (proposed); may have statutory overlay | **UNVERIFIED / VERIFY-UK-GH** |
+| RET-ACC | Administrative access history | `access_reviews`, privileged grant history snapshots, session-related audit subset | Review/`created_at` | **2 years** | Delete or pseudonymise | Operational (proposed) | **UNVERIFIED** |
+| RET-STAFF | Staff account records (family) | `profiles` (staff), `staff_memberships`, `account_status_events`, HR-adjacent fields | End of employment / offboard date | Employment period **+ 6 years** (ceiling for necessary records; subtypes may be shorter — §16.1.1) | Retain only necessary records; delete surplus PII | Mix of statutory (payroll/tax) + operational | **UNVERIFIED / VERIFY-UK-GH** — record-specific |
+| RET-CLIENT | Client account records (platform CRM) | `clients`, `client_contacts`, `client_memberships` | End of contract / archive date | Contract period **+ 6 years** for necessary commercial records; unnecessary contacts earlier per §16.1.1 | Delete unnecessary personal data; keep FIN/CON as required | Contractual + operational | **UNVERIFIED** |
+| RET-SUP | Support tickets | `tickets`, `ticket_messages`, support Storage | Ticket `closed` timestamp | **3 years** after closure (default); subtypes/exceptions per §16.1.1 | Delete or anonymise | Operational; contractual exceptions possible | **UNVERIFIED** |
+| RET-MON | Monitoring history | `health_checks`, resolved `alerts` detail | `checked_at` / alert resolved_at | **90 days** | Automatically purge (after OD-04 approval) | Operational | **UNVERIFIED** (low statutory expectation) |
+| RET-NOTIF | System notifications | `notifications`, `delivery_attempts` | `created_at` | **90 days** | Automatically purge (after OD-04 approval) | Operational | **UNVERIFIED** (low statutory expectation) |
+| RET-TEMP | Temporary access grants | `temporary_access` | Grant `ends_at` / `revoked_at` | **2 years** after expiry | Remove unnecessary personal information; keep minimal audit via RET-AUD if logged | Operational | **UNVERIFIED** |
+| RET-CMS-PUB | CMS publishing history (company CMS) | `cms_revisions`, publish audit links | While service active; offboarding on decommission | Active service + offboarding rules | Export or delete during offboarding | Operational / contractual | **UNVERIFIED** |
+| RET-CLIENT-MEDIA | Client media and documents | `client-documents` Storage, `project_documents` | Per **client contract** / instruction | **Client-specific** (not OkangGroup default) | Export then securely delete when authorised | **Client-controlled** + law | **CLIENT-SPECIFIC / UNVERIFIED** until per-client schedule set |
 
-### 16.3 Retention triggers, clocks, and legal holds
+### 16.3 Retention policy governance — Amendment B
+
+Every retention policy (category and record-type subtype) must have governance metadata. Silent shortening of a legally required period is forbidden.
+
+| Field / control | Requirement |
+| --- | --- |
+| Policy owner | Named role (e.g. Owner / Data Protection Officer designate) accountable for the category |
+| Effective date | `effective_from` when an approved version becomes binding |
+| Review date | Mandatory next-review date (design default: annual, or sooner after legal change) |
+| Version history | Append-only `retention_policy_versions`: version_no, schedule snapshot, basis classes, approved_by, approved_at, supersedes |
+| Change control | New version required for any period change; diff recorded |
+| No silent shorten | A new version **must not** reduce a period below a verified statutory or active contractual minimum; system validation rejects such publishes |
+| Lengthening | Allowed when statute/contract/ops require; applies to new clocks and, where required, extends `retain_until` on existing rows |
+| Unpublished draft | Configuration Studio may draft; only approved versions drive purge eligibility |
+
+Design tables (future, not created now): `retention_policies`, `retention_policy_versions`, `retention_record_types`.
+
+### 16.4 Retention triggers, clocks, and legal holds
 
 | Mechanism | Design requirement |
 | --- | --- |
-| `retention_category` | Every purge-eligible table (or row class) maps to a Category ID in §16.2 |
+| `retention_category` + `retention_record_type` | Every purge-eligible entity maps to §16.2 category and §16.1.1 type |
 | `retention_started_on` | Documented start date per row or derived from trigger column (immutable once set for that cycle) |
-| `retain_until` | Computed or stored date = start + period; recalculated only when policy version changes under change control |
-| Policy versioning | `retention_policy_versions` (Configuration / Security domain) stores approved schedule text, effective_from, approved_by — **no version approved yet** |
-| Legal hold | `legal_holds` table (design): matter ref, scope (client_id / entity_type / entity_id / category), `placed_at`, `released_at`, `placed_by`. **While active, purge/pseudonymisation jobs must skip matching rows** |
-| Legislation override | If a verified legal minimum exceeds the operational period, the longer period wins for that jurisdiction/client |
-| Client override | Client contractual retention may extend (not silently shorten below mandatory legal minima) platform-held client PII |
+| `retain_until` | Computed from approved policy version; not silently rewritten by unapproved drafts |
+| Legal hold | `legal_holds`: matter ref, scope (client_id / entity_type / entity_id / category / record_type), `placed_at`, `released_at`, `placed_by`. **Active hold ⇒ skip purge/pseudonymisation** |
+| Legislation override | When §16.9 verification establishes a higher statutory minimum, policy version must be updated; longer period wins |
+| Client override | Client-controlled retention may extend; cannot undercut verified statutory minima for records OkangGroup must keep |
 
-### 16.4 Pseudonymisation, deletion approvals, and secure deletion
+### 16.5 Deletion workflow and irreversibility — Amendment C
 
-| Step | Rule |
+| Stage | Rule |
 | --- | --- |
-| Eligibility | Row past `retain_until`, not on legal hold, not in mandatory FIN/CON overlap, category allows action |
-| Approval | Automated purge allowed only for RET-MON and RET-NOTIF after OD-04 approval. All other categories require **controlled deletion approval** (Owner or designated Data Protection role) recorded in `deletion_approvals` + `audit_events` |
-| Pseudonymisation | Preferred for RET-AUD / RET-ACC when action metadata must survive: replace `actor_email` / names with irreversible tokens; strip PII from `before_json`/`after_json` |
-| Hard delete | Physical delete + Storage object removal for approved categories; financial voids remain as voided records until RET-FIN expires |
-| Dual control | Deletion approver ≠ requester (mirror OD-07 separation where personal data volume is significant) |
-| Audit of deletion | Every purge batch writes append-only deletion audit (what category, count, policy version, approver, timestamp) — these deletion audits themselves follow RET-AUD |
-| Erasure requests | Data subject / client requests enter a workflow; cannot bypass legal hold or mandatory accounting retention |
+| Request | Deletion/pseudonymisation request created (`deletion_requests`) with scope, category, policy version, requester |
+| Review window | Request is **cancellable / rejectable** until final approval is recorded |
+| Dual control | Approver ≠ requester for non-automated categories |
+| Approval | Controlled approval for all categories except RET-MON / RET-NOTIF (those may auto-purge only after OD-04 approval) |
+| Pre-execution cancel | Owner/approver may cancel a pending approved job **before** execution starts |
+| Execution | Secure delete or irreversible pseudonymisation runs as an atomic batch |
+| **Post-execution** | System **must not** promise restoration of deleted information. UI/API must not offer “undelete” for securely deleted rows |
+| Backup exception | Restoration is only via backup/DR under §16.6 — separate controls; not a user-facing undo |
+| Audit | Request, cancel, approve, execute, and failure events append to deletion audit (RET-AUD) |
 
-### 16.5 Backup expiry and restoration
+### 16.6 Backup expiry and post-restore controls
 
 | Topic | Design requirement |
 | --- | --- |
-| Backup retention | Database/Storage backups must have an expiry no longer than justified by disaster recovery **and** must not silently keep purged personal data forever |
-| Restoration | Restores into non-production must scrub or restrict access; production restore that reintroduces expired PII requires a documented exception + re-purge plan |
-| Point-in-time | PITR windows (Supabase plan-dependent) are operational DR, not a separate lawful basis to retain PII beyond §16.2 — after OD-04 approval, ops runbooks must address post-restore purge |
-| Free tier | Limited backup/PITR features on Free plan — document upgrade trigger if retention/DR requirements exceed plan (§9) |
-| Offsite copies | Any export backups follow the same category clocks or are encrypted with timed destruction |
+| Separate clock | Backup retention is a **DR policy**, distinct from row-level retention; documented expiry required |
+| No forever PII via backups | Backups must not silently retain purged personal data indefinitely |
+| Post-restore | Production restore that reintroduces data past `retain_until` requires documented exception + **mandatory re-purge plan** before the environment is treated as clean |
+| Non-production | Restores scrub or restrict access; no unrestricted copy of live PII |
+| PITR | Point-in-time recovery windows are operational DR, not a lawful basis to keep PII beyond approved schedules |
+| Free tier | Supabase Free backup/PITR limits may force upgrade if DR+retention requirements exceed plan (§9) |
 
-### 16.6 Mapping notes for implementers (design only — not authorised to build)
+### 16.7 Mapping notes for implementers (design only — not authorised to build)
 
 | Category | Implementation sketch (future) |
 | --- | --- |
-| RET-FIN / RET-CON | No automatic delete in v1 without approval UI; report “eligible for deletion” queues |
-| RET-AUD / RET-ACC / RET-TEMP | Scheduled job → pseudonymise then delete per policy version |
-| RET-MON / RET-NOTIF | Scheduled hard purge (90 days) once OD-04 approved |
-| RET-STAFF / RET-CLIENT | Offboarding sets clocks; deletion queue after +6 years |
-| RET-SUP | Clock from closed_at; anonymise messages first option |
-| RET-CLIENT-MEDIA | `clients.retention_profile_id` or contract field drives period; OD-09 export before delete |
-| RET-CMS-PUB | Company CMS revisions retained while site live; decommission runbook |
+| RET-FIN / RET-CON | Eligibility queues only; approval-gated delete |
+| RET-AUD / RET-ACC / RET-TEMP | Pseudonymise then delete per approved policy version |
+| RET-MON / RET-NOTIF | Scheduled hard purge (90 days) only after OD-04 approval |
+| RET-STAFF / RET-CLIENT | Offboarding sets clocks; subtype-specific delete rules |
+| RET-SUP | Clock from closed_at; record-type may force anonymise-first or extend |
+| RET-CLIENT-MEDIA | Per-client retention profile; OD-09 export before delete |
+| RET-CMS-PUB | Retain while company site live; decommission runbook |
 
-### 16.7 Final technical checks before freeze (queued — run after OD-04 agreement)
+### 16.8 Final technical checks before freeze (queued — run after OD-04 agreement)
 
-Design-only review checklist (not started in V2.1.6):
+Design-only review checklist (not started):
 
 1. All table relationships and foreign keys  
 2. Tenant-isolation constraints (§3.3.1–§3.3.2)  
@@ -2050,14 +2103,59 @@ Design-only review checklist (not started in V2.1.6):
 9. Correct Supabase project access (`prbgsnxpwyepdggdysnt` / `okanggroup@gmail.com`)  
 10. Compatibility with existing Vite website (OD-14 A)
 
-### 16.8 Owner actions to close OD-04
+### 16.9 Legal verification checklist (NOT COMPLETED)
 
-1. Obtain UK/Ghana legal review of categories flagged **VERIFY-UK-GH** / **VERIFY**.  
-2. Confirm or amend each proposed period.  
+**Status: Legal verification has not been performed. Cursor has not obtained legal advice. Completing this checklist is an Owner / counsel task.**
+
+#### 16.9.1 Authorities and instruments to consult
+
+| Jurisdiction | Authority / instrument (indicative — confirm current names and guidance) | Topics to confirm |
+| --- | --- | --- |
+| United Kingdom | Companies House / Companies Act recordkeeping expectations | Company accounting books and records minima |
+| United Kingdom | HM Revenue & Customs (HMRC) guidance on business/tax record retention | Tax invoices, payments, VAT/relevant records; start/end of clock |
+| United Kingdom | UK GDPR / Data Protection Act 2018; ICO guidance | Storage limitation, minimisation, erasure vs exemption for legal claims |
+| United Kingdom | Employment law / payroll record guidance (as advised by counsel) | Which staff record subtypes have distinct minima |
+| United Kingdom | Limitation Act considerations (via counsel) | Whether 6-year commercial retention aligns with claim periods for contract types used |
+| Ghana | Data Protection Commission / Data Protection Act, 2012 (Act 843) | Lawful processing, retention, cross-border transfer principles for UK-hosted platform serving Ghana clients |
+| Ghana | Ghana Revenue Authority (and relevant tax legislation, via counsel) | Tax/accounting record retention for entities with Ghana nexus |
+| Ghana | Registrar of Companies / Companies Act obligations (via counsel) | Corporate recordkeeping if OkangGroup or clients have Ghana company duties |
+| Both | Client contracts and sector rules (charity, health, etc.) | Contractual retention that overrides operational defaults |
+
+#### 16.9.2 Questions requiring confirmation (per category)
+
+| ID | Question | Relates to |
+| --- | --- | --- |
+| LQ-01 | What is the minimum retention for OkangGroup’s accounting records (invoices, payments, tax evidence) under UK law for our entity type? | RET-FIN |
+| LQ-02 | What additional or different minimum applies if OkangGroup has Ghana tax/company filing duties? | RET-FIN |
+| LQ-03 | Do limitation periods for our standard contract types require ≥6 years post-termination retention of agreements? | RET-CON |
+| LQ-04 | Which staff record subtypes (payroll, tax, right-to-work, performance, contact) have distinct UK/Ghana minima? | RET-STAFF |
+| LQ-05 | After a client relationship ends, what commercial CRM fields must we keep vs may we delete early? | RET-CLIENT |
+| LQ-06 | Are 2-year security/access log periods adequate, or do incident/insurance requirements demand longer? | RET-AUD, RET-ACC, RET-TEMP |
+| LQ-07 | Do any client sectors require support transcript retention >3 years? | RET-SUP |
+| LQ-08 | What cross-border rules apply when Ghana client PII is processed in a London (eu-west-2) database? | OD-16, all client PII |
+| LQ-09 | How should legal holds interact with statutory erasure rights and client offboarding exports? | Holds, OD-09 |
+| LQ-10 | What backup/PITR retention is compatible with storage-limitation duties after secure deletion? | §16.6 |
+| LQ-11 | Confirm client-owned CMS/media retention is entirely client-instructed except where OkangGroup is legal controller for specific platform logs | RET-CLIENT-MEDIA, §6.5 |
+
+#### 16.9.3 Outcome recording (future)
+
+When counsel answers are received, update a new architecture revision that:
+
+1. Marks each category `VERIFIED` / `AMENDED` / `CLIENT-SPECIFIC` with citation notes (no need to paste privileged advice verbatim).  
+2. Records `OD-04` approval explicitly.  
+3. Still does not authorise coding until freeze + coding authorisation.
+
+**V2.1.7 does not perform step 1–2.**
+
+### 16.10 Owner actions to close OD-04
+
+1. Complete §16.9 with qualified UK/Ghana legal review.  
+2. Confirm or amend each proposed period and record-type subtype rules.  
 3. Confirm automated vs approval-gated purge categories.  
-4. Explicitly record: `OD-04 R1-approved` (or amended schedule id) — **not done in V2.1.6**.  
-5. Only then proceed to §16.7 technical checks and freeze consideration.
+4. Approve first `retention_policy_versions` entry (policy owner, effective date, review date).  
+5. Explicitly record `OD-04 R1-approved` (or amended id) — **not done**.  
+6. Only then run §16.8 technical checks and consider freeze.
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.6 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 PROPOSED ONLY (NOT APPROVED). CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.7 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. CODING HOLD remains in effect.**
