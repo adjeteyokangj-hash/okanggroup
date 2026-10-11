@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
-| Document version | **2.1.4** |
+| Document version | **2.1.5** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
-| Working baseline | V2.1.3 amendments retained; V2.1.4 adds final technical clarifications + recommended (unapproved) business-decision options |
+| Working baseline | V2.1.3–V2.1.4 technical amendments retained; V2.1.5 records business decisions (§14.5) |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -14,8 +14,9 @@
 | Forbidden project | `vzgfvzzbgrlxvixejmdt` (not the platform database) |
 | Deliverable type | PostgreSQL design contract (not applied SQL) |
 | Public website | Existing Vite site preserved; no framework rewrite required by this contract |
-| Phase-1 decisions recorded | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (direction accepted) |
-| Remaining business decisions | 12 open — recommendations in §14.4 **not** auto-approved |
+| Phase-1 architecture decisions | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` (**preserved**) |
+| Business decisions recorded | `OD-01 R1, OD-03 R1-amended, OD-04 R1-pending-durations, OD-06 R1, OD-07 R1-amended, OD-09 R1, OD-10 R1, OD-13 R1, OD-15 R1, OD-16 R1, OD-17 R1-amended, OD-18 R1` |
+| Still open | **OD-04** durations/legal review; freeze not authorised |
 | Architecture frozen | **No** |
 
 ---
@@ -214,17 +215,32 @@ Tables requiring composite uniqueness / FKs include (non-exhaustive): `projects`
 | Stable `client_id` | Once a client-scoped row is inserted, `client_id` is **immutable**. Updates that change `client_id` are rejected (trigger or generated-column/protection pattern). |
 | No silent re-tenanting | Moving work between clients requires creating a new row (or an explicit, audited reassignment procedure that inserts a successor and archives the old row)—never an in-place `client_id` rewrite that would orphan or rewire history. |
 | Parent id changes | Changing `project_id` / `cms_instance_id` on an existing row is allowed only when the new parent shares the same immutable `client_id` (enforced by composite FK). |
-| Archive vs transfer | Client archive does not reassign child rows to another client. Offboarding/export follows OD-09 when approved. |
+| Archive vs transfer | Client archive does not reassign child rows to another client. Offboarding/export follows **OD-09 R1** (§7.3, §14.5). |
 
-### 3.4 Money and currency
+### 3.4 Money, tax, and currency (OD-03 R1-amended; finance business rules)
 
 | Rule | Detail |
 | --- | --- |
 | Amount storage | `numeric(18,2)` for major-unit money fields |
 | Currency | ISO 4217 `char(3)` — initial support `GBP`, `GHS` |
 | Historical integrity | Invoice/payment rows store `currency_code` and amounts as issued; price-list changes must not rewrite historical rows |
-| FX | Optional `fx_rate numeric(18,8)` + `fx_rate_as_of date` + `fx_base_currency` when converting for reporting |
-| Rounding | Documented in Open Decisions ([OD-03](#14-open-decisions)) |
+| FX | Optional `fx_rate numeric(18,8)` + `fx_rate_as_of date` + `fx_base_currency` when converting for reporting; exchange-rate adjustments recorded explicitly, never silent rewrite of issued totals |
+| Rounding | Half-up to `numeric(18,2)` unless a tax profile overrides (OD-03) |
+| Tax profiles | Configurable by **jurisdiction**, with **effective dates**, **exemptions**, and rates; never hard-coded only to one country |
+| Invoice tax snapshots | Each invoice stores the tax composition applied at issue time (jurisdiction, rate refs, taxable base, tax amount, exemptions applied)—later tax-profile edits must not mutate issued invoices |
+| Accounting distinctions | System must separately track: amount invoiced, tax charged, amount paid, outstanding balance, credit notes, refunds, currency, and FX adjustments |
+| Funds ownership | Distinguish **OkangGroup income** (fees OkangGroup earns) from **client-held / client-belonging funds** (money that is not OkangGroup revenue). Schema and reports must not conflate the two |
+
+### 3.4.1 Billing enforcement vs public availability (business rule A — OD-10 R1)
+
+Billing/subscription enforcement is **separate** from public website availability.
+
+| Allowed after authorised decision | Forbidden as automatic behaviour |
+| --- | --- |
+| Mark subscription `past_due` / notify / pause OkangGroup **management** services (portal CMS editing, managed content ops) when explicitly authorised | Automatically take a client’s **public website** offline because a CMS subscription payment was missed |
+| Manual ops decision to restrict management access after review | Automatic CMS/website hard shutdown driven solely by dunning timers |
+
+Public client sites must not go dark as a side effect of billing automation.
 
 ### 3.5 Enumerations
 
@@ -284,7 +300,7 @@ Actor snapshots (`actor_email`, `actor_display_name`, etc.) exist for **accounta
 
 | Rule | Requirement |
 | --- | --- |
-| Legal basis required | Retention of snapshot PII must follow schedules approved under **OD-04**. Until OD-04 is decided, design assumes snapshots are retained for the operational life of the platform **only as a holding position**, not as a freeze of retention policy. |
+| Legal basis required | Retention of snapshot PII must follow schedules under **OD-04 R1-pending-durations**. Category-based schedules are required; **concrete durations and legal review remain open**. Until durations are approved, snapshots are retained only as a holding position—not a freeze of retention policy. |
 | Category-based schedules | OD-04 must define retention by category at minimum: security audit events; access reviews; financial/commercial records; support transcripts; health-check telemetry; notification delivery logs. |
 | Minimisation | Snapshots store the minimum identity fields needed to explain “who acted”; do not copy full profile rows or unrelated PII into `before_json`/`after_json` by default. |
 | Pseudonymisation / erasure path | OD-04 may require a controlled purge or irreversible pseudonymisation job (service role only) that replaces snapshot emails/names with stable opaque tokens after the retention period, while keeping the audit event’s action/entity metadata for integrity where law allows. |
@@ -830,7 +846,7 @@ Publishing rules: draft → review → publish; restore from `cms_revisions`. Ex
 | `verification_status` | `text` | NULL (`unverified`, `verified`, `rejected`) |
 | … | | |
 
-At least one of client/project/cms/internal flag must situate the task ([OD-06](#14-open-decisions) for pure-internal tasks).
+**OD-06 R1:** Internal company tasks use `is_internal = true` with `client_id IS NULL` (§3.3.2)—no fictional client. Client-linked tasks require `client_id` and optional composite parent FKs.
 
 #### `task_assignments`
 
@@ -934,7 +950,10 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `currency_code` | `char(3)` | NOT NULL |
 | `current_period_start` / `current_period_end` | `date` | NOT NULL |
 | `cancel_at_period_end` | `boolean` | NOT NULL DEFAULT false |
+| `grace_period_days` | `int` | NULL — configurable (OD-10 R1) |
 | … | | |
+
+**OD-10 R1:** Dunning may set `past_due` and notify. It must **not** automatically disconnect the client’s public website or CMS runtime. Any suspension of OkangGroup **management** services requires an authorised decision (§3.4.1).
 
 #### `invoices` / `invoice_lines`
 
@@ -942,18 +961,28 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | --- | --- | --- |
 | `id` | `uuid` | PK |
 | `client_id` | `uuid` | NOT NULL |
-| `invoice_number` | `text` | NOT NULL UNIQUE |
+| `invoice_number` | `text` | NOT NULL UNIQUE — **OD-17 R1-amended:** allocated atomically; never reused; voided numbers retained |
 | `subscription_id` | `uuid` | NULL |
 | `contract_id` | `uuid` | NULL |
 | `status` | `text` | `draft`, `issued`, `paid`, `partially_paid`, `void`, `overdue` |
 | `currency_code` | `char(3)` | NOT NULL |
 | `issue_date` / `due_date` | `date` | |
-| `subtotal` / `tax_total` / `total` / `amount_paid` | `numeric(18,2)` | historical snapshot |
+| `subtotal` | `numeric(18,2)` | amount invoiced (ex-tax or as defined by lines) |
+| `tax_total` | `numeric(18,2)` | tax charged |
+| `total` | `numeric(18,2)` | invoiced total |
+| `amount_paid` | `numeric(18,2)` | sum of applied payments |
+| `amount_credited` | `numeric(18,2)` | NOT NULL DEFAULT 0 — credit notes applied |
+| `amount_outstanding` | `numeric(18,2)` | derived or stored consistently with paid/credited |
+| `tax_snapshot_json` | `jsonb` | NOT NULL DEFAULT `{}` — jurisdiction, rates, exemptions, bases at issue (OD-03) |
+| `funds_class` | `text` | NOT NULL DEFAULT `okanggroup_income` — vs `client_funds` (or equivalent) so OkangGroup revenue ≠ client-belonging money |
 | `fx_rate` / `fx_rate_as_of` | | optional |
+| `voided_at` / `void_reason` | | void preserves `invoice_number` in audit history |
 
-`invoice_lines`: `invoice_id`, `description`, `quantity`, `unit_amount`, `line_total`, optional `service_plan_id`.
+`invoice_lines`: `invoice_id`, `description`, `quantity`, `unit_amount`, `line_total`, tax fields as needed, optional `service_plan_id`.
 
 Pricing overrides are per contract/subscription row — never mutate past invoices when `service_plans.default_amount` changes.
+
+**OD-17 R1-amended:** Number issuance must be concurrency-safe (atomic sequence / transactional allocation). Gaps appear only when a number was issued then voided; voided numbers remain queryable.
 
 ---
 
@@ -969,16 +998,19 @@ Pricing overrides are per contract/subscription row — never mutate past invoic
 | `amount` | `numeric(18,2)` | NOT NULL |
 | `currency_code` | `char(3)` | NOT NULL |
 | `paid_on` | `date` | NOT NULL |
-| `method` | `text` | NOT NULL (bank_transfer, cash, other, provider_pending) |
-| `provider` | `text` | NULL — unused until OD-01 |
+| `method` | `text` | NOT NULL (bank_transfer, cash, other) — **OD-01 R1:** manual recording initially |
+| `provider` | `text` | NULL — reserved for future provider integration (schema retains extensibility) |
 | `provider_ref` | `text` | NULL |
 | `status` | `text` | NOT NULL DEFAULT `recorded` |
+| `funds_class` | `text` | NOT NULL DEFAULT `okanggroup_income` — same distinction as invoices |
 | `fx_rate` / `fx_rate_as_of` | | optional |
 | … | | |
 
 #### `credit_notes` / `refunds`
 
-Parallel structures referencing `invoice_id` / `payment_records.id` with immutable amounts and reason codes. Approval required via `approvals` for issue/refund above thresholds ([OD-07](#14-open-decisions)).
+Parallel structures referencing `invoice_id` / `payment_records.id` with immutable amounts and reason codes.
+
+**OD-07 R1-amended:** Configurable approval thresholds (amount + currency + role) in Configuration Studio. **Separation of duties:** the profile that **requests** a credit/refund must not be the same profile that **approves** it (enforce in `approvals` workflow). Below-threshold paths still require a distinct approver when the requester holds the finance role that would otherwise self-approve—or define an alternate approver role; self-approval is forbidden.
 
 #### `expenses`
 
@@ -1433,14 +1465,17 @@ Platform permissions **do not** automatically grant access to an external client
 5. Retain `audit_events` and other historical rows with actor snapshots; never CASCADE-delete accountability data.
 6. Auth user deletion only as break-glass after OD-09 checks.
 
-### 7.3 Client offboarding / archive
+### 7.3 Client offboarding / archive (OD-09 R1; portability business rule C)
 
-1. `clients.account_status = archived`, `archived_at`.
-2. Suspend client portal memberships; revoke invitations.
-3. Pause subscriptions with recorded reason; do not delete invoices/payments.
-4. Set `cms_instances.status = retired` or `disconnected`; revoke credentials via secret rotation runbook ([OD-09](#14-open-decisions)).
-5. Monitoring: disable checks (`is_authorised = false`) unless contractual retention monitoring remains.
-6. Export/retention obligations — Open Decision OD-04 / OD-09.
+Controlled handover — client data must remain portable:
+
+1. **Export** authorised client content and documentation the client is entitled to receive.
+2. **Revoke** portal memberships, invitations, and OkangGroup credentials to external CMS where appropriate (`credential_ref` rotation/revoke).
+3. **Archive** client (`account_status = archived`); pause subscriptions with recorded reason.
+4. Do **not** delete invoices, payments, or audit history required for lawful retention.
+5. Set `cms_instances.status` to `retired` / `disconnected` as appropriate; public site handling is contractual—not an automatic billing kill-switch (§3.4.1).
+6. **Lawful deletion / pseudonymisation** only per **OD-04** schedule once durations are approved; until then retain per holding rules in §3.9.1.
+7. Monitoring: disable checks unless retention monitoring remains authorised.
 
 ---
 
@@ -1469,7 +1504,7 @@ Hooks: assignment events → notifications; completion → verification; escalat
 ### 8.5 Subscriptions
 
 `trial` → `active` ↔ `past_due` → `paused` / `cancelled` / `expired`.  
-Overdue invoice automation rules — Open Decision ([OD-10](#14-open-decisions)).
+Overdue rules per **OD-10 R1**: configurable grace + notifications; no automatic public website/CMS runtime shutdown (§3.4.1).
 
 ---
 
@@ -1566,7 +1601,8 @@ Before any production migration apply:
 | 2.1.1 | 2026-10-11 | Added option sets for six Phase-1 critical decisions |
 | 2.1.2 | 2026-10-11 | Recorded Owner choices OD-02/05/08/11/12/14 = A with OD-08/OD-14 safeguards |
 | 2.1.3 | 2026-10-11 | Owner review amendments: RLS-per-migration; cross-client composite FKs; audit/actor survival; private privilege contract; external CMS AuthZ boundary (§6.5); Open Decisions register cleanup |
-| 2.1.4 | 2026-10-11 | Final design refinements: private EXECUTE vs schema/Data API (§5.1.2); nullable/internal/immutable tenancy (§3.3.2); audit retention pending OD-04 (§3.9.1); §14.4 recommended options for 12 remaining decisions (**not approved**). **Still not frozen.** |
+| 2.1.4 | 2026-10-11 | Final design refinements: private EXECUTE vs schema/Data API (§5.1.2); nullable/internal/immutable tenancy (§3.3.2); audit retention pending OD-04 (§3.9.1); §14.4 option catalogue |
+| 2.1.5 | 2026-10-11 | Recorded business decisions (§14.5) with OD-03/07/17 amendments; OD-04 pending durations; business rules A/B/C (billing≠site offline; accounting distinctions; portable offboarding). Prior architecture decisions OD-02/05/08/11/12/14 A **preserved**. **Still not frozen.** |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -1586,11 +1622,12 @@ Before any production migration apply:
 | A Private schema USAGE vs EXECUTE vs Data API / RLS | §5.1.2 |
 | B Nullable parents, internal-only rows, immutable `client_id` | §3.3.2 |
 | C Audit snapshots vs OD-04 retention / erasure | §3.9.1 |
-| Remaining 12 business decisions (recommended, not approved) | §14.4 |
+| Remaining 12 business decision options (catalogue) | §14.4 |
+| Recorded business decisions + amendments + rules A/B/C | §14.5 |
 
 **Git status note:** Published on dedicated review branch `docs/architecture-v2.1-review`. Must not merge to production/default until Owner freezes V2.1. Coding HOLD; no migrations.
 
-**Recommended specification sequence (Owner):** Finish V2.1 review (incl. remaining open decisions) → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
+**Recommended specification sequence (Owner):** Complete OD-04 retention schedule + final technical checks → consider V2.1 freeze → V2.2 Workflows & Permissions → V2.3 CMS Integration → V2.4 Security & Implementation Readiness → coding authorisation.
 
 ---
 
@@ -1602,24 +1639,24 @@ Cursor must not invent answers for these. Owner (or designated officer) decides 
 
 | ID | Topic | Status | Decision / remaining need |
 | --- | --- | --- | --- |
-| OD-01 | Payment provider | Open | Recommendations in §14.4 — **not approved** |
+| OD-01 | Payment provider | **Recorded R1** | Manual payments initially; provider fields reserved — §14.5 |
 | OD-02 | Private schema for helpers | **Recorded A** | See §14.3; privilege model §5.1.1–§5.1.2 |
-| OD-03 | Tax and rounding | Open | Recommendations in §14.4 — **not approved** |
-| OD-04 | Retention | Open | Recommendations in §14.4; design constraints in §3.9.1 — **not approved** |
+| OD-03 | Tax and rounding | **Recorded R1-amended** | Jurisdiction, effective dates, exemptions, invoice tax snapshots — §3.4, §14.5 |
+| OD-04 | Retention | **R1-pending-durations** | Category schedules required; durations + legal review still open — §3.9.1, §14.5 |
 | OD-05 | Permission catalogue mutability | **Recorded A** | See §14.3 — Configuration Studio limits |
-| OD-06 | Internal tasks without client | Open | Recommendations in §14.4; tenancy rules §3.3.2 — **not approved** |
-| OD-07 | Credit/refund approval thresholds | Open | Recommendations in §14.4 — **not approved** |
+| OD-06 | Internal tasks without client | **Recorded R1** | Internal tasks allowed; no fictional client — §3.3.2, §14.5 |
+| OD-07 | Credit/refund approval thresholds | **Recorded R1-amended** | Configurable thresholds; requester ≠ approver — §14.5 |
 | OD-08 | Owner access to client PII / sensitive CMS | **Recorded A** | See §14.3 — contractual non-override + §6.5 |
-| OD-09 | Offboarding runbook | Open | Recommendations in §14.4 — **not approved** |
-| OD-10 | Subscription dunning | Open | Recommendations in §14.4 — **not approved** |
+| OD-09 | Offboarding runbook | **Recorded R1** | Export → revoke → archive → lawful deletion — §7.3, §14.5 |
+| OD-10 | Subscription dunning | **Recorded R1** | No automatic public site/CMS shutdown — §3.4.1, §14.5 |
 | OD-11 | MFA enforcement set | **Recorded A** | See §14.3 — fail closed for privileged sessions |
-| OD-12 | Invitation channel | **Recorded A** | See §14.3; sender domain still OD-15 |
-| OD-13 | First CMS pilot | Open | Recommendations in §14.4 — **not approved** |
+| OD-12 | Invitation channel | **Recorded A** | See §14.3; sender domain OD-15 R1 |
+| OD-13 | First CMS pilot | **Recorded R1** | OkangGroup CMS first, then one client CMS — §14.5 |
 | OD-14 | Admin app hosting | **Recorded A** | See §14.3 — public site independence |
-| OD-15 | Official email | Open | Recommendations in §14.4 — **not approved** |
-| OD-16 | Cross-border data | Open | Recommendations in §14.4 — **not approved** |
-| OD-17 | Invoice numbering | Open | Recommendations in §14.4 — **not approved** |
-| OD-18 | Client-visible project fields | Open | Recommendations in §14.4 — **not approved** |
+| OD-15 | Official email | **Recorded R1** | Verified `@okanggroup.com` when configured — §14.5 |
+| OD-16 | Cross-border data | **Recorded R1** | London DB + UK/Ghana safeguards — §14.5 |
+| OD-17 | Invoice numbering | **Recorded R1-amended** | Atomic unique numbers; voided numbers retained — §14.5 |
+| OD-18 | Client-visible project fields | **Recorded R1** | Explicit allow-lists — §14.5 |
 
 ### 14.1 Six Phase-1 critical decisions — meaning, consequences, options
 
@@ -1713,16 +1750,17 @@ Owner has recorded option **A** for all six ([§14.3](#143-recorded-architecture
 
 ### 14.2 How to reply (Owner)
 
-Phase-1 critical decisions are recorded in §14.3. For the twelve remaining decisions, reply using option letters from §14.4 (e.g. `OD-01 R1, OD-03 R1, …`). **Recommendations are not approved until the Owner explicitly records them.**
+Architecture decisions: §14.3. Business decisions: §14.5. **OD-04** still needs a concrete retention schedule before freeze. Option catalogues in §14.1 / §14.4 remain for audit trail.
 
-### 14.3 Recorded architecture decisions (direction accepted; schema not frozen)
+### 14.3 Recorded architecture decisions (preserved; schema not frozen)
 
 | Field | Value |
 | --- | --- |
 | Decision record | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` |
 | Recorded date | 2026-10-11 |
 | Effect | Establishes Phase-1 **direction** |
-| Freeze status | **Not frozen** — subject to verification against the complete schema during Owner review |
+| V2.1.5 | **Preserved unchanged** |
+| Freeze status | **Not frozen** |
 
 | Decision | Option | Binding requirement |
 | --- | --- | --- |
@@ -1735,11 +1773,9 @@ Phase-1 critical decisions are recorded in §14.3. For the twelve remaining deci
 
 These decisions do **not** authorise SQL migrations, application code, or production deployment.
 
-### 14.4 Remaining business decisions — recommended options (NOT APPROVED)
+### 14.4 Business decision option catalogue (historical)
 
-Status of every item below: **Open**. Cursor must not treat Owner “recommendations” in chat as approved until the Owner records an explicit decision record (as with §14.3).
-
-**Suggested reply format:** `OD-01 R1, OD-03 R1, OD-04 R1, OD-06 R1, OD-07 R1, OD-09 R1, OD-10 R1, OD-13 R1, OD-15 R1, OD-16 R1, OD-17 R1, OD-18 R1`
+Options below were the V2.1.4 catalogue. **Authoritative recorded outcomes are in §14.5.** Tables retained for audit.
 
 ---
 
@@ -1863,20 +1899,55 @@ Status of every item below: **Open**. Cursor must not treat Owner “recommendat
 | **R2** | Clients see all non-finance project fields by default | Transparent; may overshare staffing internals |
 | **R3** | Clients see status + milestones only | Safest minimal portal; may frustrate clients |
 
+### 14.5 Recorded business decisions (V2.1.5 — not a freeze)
+
+| Field | Value |
+| --- | --- |
+| Decision record | `OD-01 R1, OD-03 R1-amended, OD-04 R1-pending-durations, OD-06 R1, OD-07 R1-amended, OD-09 R1, OD-10 R1, OD-13 R1, OD-15 R1, OD-16 R1, OD-17 R1-amended, OD-18 R1` |
+| Recorded date | 2026-10-11 |
+| Architecture decisions preserved | `OD-02 A, OD-05 A, OD-08 A, OD-11 A, OD-12 A, OD-14 A` |
+| Freeze status | **Not frozen** |
+| Coding | **HOLD** — no migrations, application code, or production deploy |
+
+| Decision | Option | Binding requirement |
+| --- | --- | --- |
+| **OD-01** | R1 | Manual payment recording initially; retain schema ability to integrate providers later (`provider` / `provider_ref` reserved). |
+| **OD-03** | R1-amended | Tax rules support **jurisdiction**, **effective dates**, **exemptions**, and **invoice-level tax snapshots**; rounding per §3.4. |
+| **OD-04** | R1-pending-durations | Category-based retention schedules required before implementation; **durations and legal requirements remain open** — must be reviewed before freeze (§3.9.1). |
+| **OD-06** | R1 | Internal company tasks allowed with `is_internal` and NULL `client_id`; no fictional client (§3.3.2). |
+| **OD-07** | R1-amended | Configurable approval thresholds; **requester and approver must be different profiles** for credits/refunds. |
+| **OD-09** | R1 | Controlled offboarding: export → revoke access → archive → retain lawful records → delete/pseudonymise only per OD-04 (§7.3). |
+| **OD-10** | R1 | Configurable grace/notifications; **no automatic shutdown** of client public websites or CMS runtimes (§3.4.1). |
+| **OD-13** | R1 | Pilot OkangGroup company CMS first, then one selected client CMS. |
+| **OD-15** | R1 | Official verified `@okanggroup.com` sending identities once configured. |
+| **OD-16** | R1 | Platform DB in London (`eu-west-2`) with documented UK/Ghana data-processing safeguards. |
+| **OD-17** | R1-amended | Unique invoice numbers issued **atomically**; voided numbers and audit history preserved. |
+| **OD-18** | R1 | Client-visible information via **explicit allow-lists**. |
+
+#### 14.5.1 Additional business rules (recorded with V2.1.5)
+
+| Rule | Statement |
+| --- | --- |
+| **A — Billing ≠ public availability** | Missed CMS subscription payment must not automatically take a client’s public website offline. Authorised decisions may suspend certain OkangGroup management services; public availability remains protected from automatic billing kill-switches (§3.4.1, OD-10 R1). |
+| **B — Proper accounting** | Finance distinguishes amount invoiced, tax charged, amount paid, outstanding balance, credit notes, refunds, currency, and FX adjustments; and distinguishes OkangGroup income from client-belonging funds (§3.4). |
+| **C — Portable client data** | Client exit supports controlled handover: export authorised content/docs, revoke OkangGroup access where appropriate, retain only records that must lawfully be preserved (§7.3, OD-09 R1, OD-04). |
+
+These decisions do **not** authorise SQL migrations, application code, merge to `main`, or production deployment.
+
 ---
 
 ## 15. Owner review checklist
 
 - [ ] Confirm Supabase MCP access as `okanggroup@gmail.com` to `prbgsnxpwyepdggdysnt`
-- [ ] Examine §5.1.2 private privilege / Data API clarification
-- [ ] Examine §3.3.2 nullable, internal, and immutable tenancy rules
-- [ ] Examine §3.9.1 audit retention pending OD-04
 - [x] V2.1.3 six security amendments retained
-- [x] Phase-1 decisions OD-02/05/08/11/12/14 = A recorded
-- [ ] Explicitly approve or amend §14.4 recommendations for the 12 remaining decisions
-- [ ] Freeze V2.1 explicitly after clarifications + business decisions (not done)
-- [ ] Authorise a future coding phase explicitly (this document alone does not authorise coding)
+- [x] Phase-1 architecture decisions OD-02/05/08/11/12/14 = A preserved
+- [x] Business decisions recorded in §14.5 (V2.1.5)
+- [x] Business rules A/B/C recorded
+- [ ] **OD-04:** establish retention schedule by category + legal review (still open)
+- [ ] Final technical checks before freeze consideration
+- [ ] Freeze V2.1 explicitly (not done)
+- [ ] Authorise a future coding phase explicitly (not done)
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.4 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. CODING HOLD remains in effect. §14.4 recommendations are not approvals.**
+**End of OkangGroup Database Architecture V2.1.5 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 pending durations. CODING HOLD remains in effect.**
