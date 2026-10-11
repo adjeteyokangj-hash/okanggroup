@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
-| Document version | **2.1.7** |
+| Document version | **2.1.8** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
-| Working baseline | V2.1.6 retention periods preserved; V2.1.7 refines §16 (record-type rules, policy governance, deletion irreversibility, legal checklist) — **OD-04 still open** |
+| Working baseline | V2.1.7 retained; V2.1.8 completes documentation amendments **A1–A3** only — **OD-04 still open**; architecture **not frozen** |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -91,12 +91,12 @@ No payment-provider integration tables beyond placeholder provider references un
 | 6 | CMS Registry | `cms_instances`, `cms_modules`, `cms_connections`, `cms_migrations` |
 | 7 | Company CMS | `cms_pages`, `cms_sections`, `cms_media_assets`, `cms_revisions`, `cms_navigation`, `cms_seo`, `contact_enquiries` |
 | 8 | Operations | `tasks`, `task_assignments`, `approvals`, `task_dependencies` |
-| 9 | Commercial | `service_plans`, `quotations`, `contracts`, `subscriptions`, `invoices`, `invoice_lines` |
+| 9 | Commercial | `service_plans`, `tax_profiles`, `tax_profile_rates`, `quotations`, `contracts`, `subscriptions`, `invoices`, `invoice_lines` |
 | 10 | Payments | `payment_records`, `credit_notes`, `refunds`, `expenses`, `fx_rates` |
 | 11 | Support | `tickets`, `ticket_messages`, `incidents` |
 | 12 | Monitoring | `monitored_services`, `health_checks`, `alerts` |
 | 13 | Notifications | `notifications`, `notification_preferences`, `delivery_attempts` |
-| 14 | Security | `audit_events`, `access_reviews`, `security_incidents` |
+| 14 | Security | `audit_events`, `access_reviews`, `security_incidents`, `retention_policies`, `retention_policy_versions`, `retention_record_types`, `legal_holds`, `deletion_requests`, `deletion_approvals` |
 | 15 | Configuration | `settings`, `feature_flags`, `workflow_definitions`, `lookup_values` |
 
 ### 2.2 Cross-domain relationship overview
@@ -168,27 +168,67 @@ System jobs set these NULL and set `source = 'system'` where applicable.
 
 Every client-scoped table must include `client_id` (denormalised where needed for RLS performance) even if also linked via `project_id` / `cms_instance_id`.
 
-#### 3.3.1 Cross-client referential integrity (mandatory)
+#### 3.3.1 Cross-client referential integrity (mandatory) — Amendment A1
 
 `client_id` alone is not sufficient. The database must prevent a row owned by Client A from referencing a project, CMS instance, contract, ticket, or other tenant resource owned by Client B.
 
-**Composite foreign-key pattern (required for client-scoped children):**
+**Tenant root (not a composite-parent pattern):**
 
-1. Parent tables expose a uniqueness suitable for composite references, typically `UNIQUE (id)` plus the natural rule that `id` already implies one `client_id`, and children store both `client_id` and the parent id.
-2. Where a child references a parent that also has `client_id`, define a composite FK such as:
+| Table | Role |
+| --- | --- |
+| `clients` | **Tenant root.** PK is `id` only. Child tables reference `clients(id)` via `client_id`. Do **not** place `UNIQUE (client_id, id)` on `clients`. |
 
-   - `FOREIGN KEY (client_id, project_id) REFERENCES projects (client_id, id)`
-   - `FOREIGN KEY (client_id, cms_instance_id) REFERENCES cms_instances (client_id, id)`
-   - `FOREIGN KEY (client_id, contract_id) REFERENCES contracts (client_id, id)`
-   - `FOREIGN KEY (client_id, invoice_id) REFERENCES invoices (client_id, id)`
-   - `FOREIGN KEY (client_id, ticket_id) REFERENCES tickets (client_id, id)`
-   - `FOREIGN KEY (client_id, monitored_service_id) REFERENCES monitored_services (client_id, id)` (when `client_id` is NOT NULL)
+**Composite foreign-key pattern (required for client-scoped children of tenant resources):**
 
-3. Parent tables that are client-scoped must therefore declare `UNIQUE (client_id, id)` (in addition to PK on `id`) so composite FKs are enforceable.
-4. Optional nullable links follow [§3.3.2](#332-nullable-parent-references-internal-records-and-tenant-immutability).
-5. Application code must not be the sole enforcement of tenant matching. RLS remains required, but **database constraints are mandatory** for cross-client integrity.
+1. Each **client-scoped parent** that other tables may reference declares `UNIQUE (client_id, id)` in addition to PK on `id` (or a partial unique when `client_id` is nullable — see below).
+2. Children that reference such a parent store both `client_id` and the parent id, and declare a composite FK, e.g. `FOREIGN KEY (client_id, project_id) REFERENCES projects (client_id, id)`.
+3. Optional nullable links follow [§3.3.2](#332-nullable-parent-references-internal-records-and-tenant-immutability). Internal-only rows (`is_internal`, `client_id` NULL) never take composite FKs to client parents.
+4. Application code must not be the sole enforcement of tenant matching. RLS remains required, but **database constraints are mandatory** for cross-client integrity.
 
-Tables requiring composite uniqueness / FKs include (non-exhaustive): `projects` and all project children; `cms_instances` and registry children; commercial documents; `subscriptions`; support tickets/messages; client-scoped monitoring; client-scoped tasks/approvals when linked to client resources.
+##### 3.3.1.1 Exhaustive client-scoped parents requiring `UNIQUE (client_id, id)`
+
+| Parent table | Domain | Notes |
+| --- | --- | --- |
+| `projects` | 5 | Required |
+| `project_deliverables` | 5 | Required if any FK targets deliverable id with tenant check |
+| `milestones` | 5 | Required if referenced by tasks/approvals with tenant check |
+| `change_requests` | 5 | Required if referenced with tenant check |
+| `project_documents` | 5 | Required if referenced with tenant check |
+| `cms_instances` | 6 | Required |
+| `cms_modules` | 6 | Required |
+| `cms_connections` | 6 | Required |
+| `cms_migrations` | 6 | Required |
+| `client_services` | 4 | Required |
+| `client_contacts` | 4 | Required if memberships/portal links use composite tenant checks |
+| `quotations` | 9 | Required |
+| `contracts` | 9 | Required |
+| `subscriptions` | 9 | Required |
+| `invoices` | 9 | Required |
+| `tickets` | 11 | Required |
+| `incidents` | 11 | Required when `client_id` NOT NULL — use **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` if platform-wide incidents allowed |
+| `payment_records` | 10 | Required |
+| `credit_notes` | 10 | Required |
+| `refunds` | 10 | Required |
+| `expenses` | 10 | Required when `client_id` NOT NULL — partial unique if internal expenses allowed |
+| `tasks` | 8 | Required when `client_id` NOT NULL — **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` (OD-06 internal tasks) |
+| `approvals` | 8 | Required when `client_id` NOT NULL — partial unique if platform-wide approvals exist |
+| `monitored_services` | 12 | Required when `client_id` NOT NULL — **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` |
+
+##### 3.3.1.2 Required composite FK examples (non-exhaustive but mandatory where the link exists)
+
+| Child | Composite FK |
+| --- | --- |
+| `project_deliverables`, `milestones`, `change_requests`, `project_documents` | `(client_id, project_id) → projects (client_id, id)` |
+| `cms_modules`, `cms_connections`, `cms_migrations` | `(client_id, cms_instance_id) → cms_instances (client_id, id)` |
+| `subscriptions` (optional cms link) | `(client_id, cms_instance_id) → cms_instances (client_id, id)` when cms set |
+| `invoices` → contract/subscription | `(client_id, contract_id) → contracts`; `(client_id, subscription_id) → subscriptions` when set |
+| `invoice_lines` | `(client_id, invoice_id) → invoices` (denormalise `client_id` onto lines) |
+| `payment_records`, `credit_notes`, `refunds` | `(client_id, invoice_id) → invoices` when invoice set |
+| `ticket_messages` | `(client_id, ticket_id) → tickets` |
+| Client-scoped `tasks` | `(client_id, project_id)` / `(client_id, cms_instance_id)` when those parents set |
+| `health_checks`, client `alerts` | `(client_id, monitored_service_id) → monitored_services` when service is client-scoped |
+
+**Bypass prohibition:** No single-column FK to a tenant parent’s `id` alone is sufficient for client-scoped data. A lone `project_id → projects(id)` without matching `client_id` is **forbidden** on client-scoped children.
 
 #### 3.3.2 Nullable parent references, internal records, and tenant immutability
 
@@ -582,6 +622,8 @@ CHECK: at least one of `permission_id` / `role_id`.
 | `status` | `text` | NOT NULL DEFAULT `active` |
 | … | | |
 
+Also **`UNIQUE (client_id, id)`** (§3.3.1.1).
+
 #### `client_memberships`
 
 Links portal users to a client with a portal role grant scope.
@@ -611,7 +653,9 @@ Catalogue of services engaged (links to commercial plans optionally).
 | `started_on` / `ended_on` | `date` | NULL |
 | … | | |
 
-**Deletion:** Clients are soft-archived (`account_status = archived`, `archived_at`). Hard delete forbidden once contracts/invoices exist (RESTRICT via FKs).
+Also **`UNIQUE (client_id, id)`**.
+
+**Deletion:** Clients are soft-archived (`account_status = archived`, `archived_at`). Hard delete forbidden once contracts/invoices exist (RESTRICT via FKs). `clients` remains the **tenant root** (PK `id` only).
 
 ---
 
@@ -899,6 +943,8 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 
 #### `service_plans`
 
+Platform catalogue (not client-scoped). No `UNIQUE (client_id, id)`.
+
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
@@ -911,12 +957,38 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `status` | `text` | NOT NULL DEFAULT `active` |
 | … | | |
 
+#### `tax_profiles` / `tax_profile_rates` (OD-03 R1-amended — Amendment A3)
+
+Platform-owned tax configuration (not a client tenant table). Ownership: Finance / Configuration Studio with `finance.tax.manage` (or Owner). **Security:** readable by finance roles; writable only by authorised finance/platform admins; never writable by client portal users.
+
+| `tax_profiles` column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `code` | `text` | NOT NULL UNIQUE |
+| `jurisdiction_code` | `text` | NOT NULL (e.g. `GB`, `GH`, or finer region key) |
+| `name` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| `allows_exemptions` | `boolean` | NOT NULL DEFAULT true |
+| … | | |
+
+| `tax_profile_rates` column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `tax_profile_id` | `uuid` | NOT NULL FK → `tax_profiles` ON DELETE RESTRICT |
+| `rate` | `numeric(9,6)` | NOT NULL |
+| `effective_from` | `date` | NOT NULL |
+| `effective_to` | `date` | NULL |
+| `exemption_codes_json` | `jsonb` | NOT NULL DEFAULT `[]` |
+| … | | |
+
+UNIQUE (`tax_profile_id`, `effective_from`). Invoice `tax_snapshot_json` copies applicable rate/exemption facts at issue time so later profile edits cannot rewrite history.
+
 #### `quotations`
 
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `client_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NOT NULL FK → `clients` |
 | `quote_number` | `text` | NOT NULL UNIQUE |
 | `status` | `text` | NOT NULL |
 | `currency_code` | `char(3)` | NOT NULL |
@@ -925,12 +997,14 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `lines_json` | `jsonb` | NOT NULL |
 | … | | |
 
+Also **`UNIQUE (client_id, id)`** (§3.3.1.1).
+
 #### `contracts`
 
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `client_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NOT NULL FK → `clients` |
 | `contract_number` | `text` | NOT NULL UNIQUE |
 | `title` | `text` | NOT NULL |
 | `status` | `text` | NOT NULL |
@@ -939,12 +1013,14 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `terms_summary` | `text` | NULL |
 | … | | |
 
+Also **`UNIQUE (client_id, id)`**.
+
 #### `subscriptions`
 
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `client_id` | `uuid` | NOT NULL |
+| `client_id` | `uuid` | NOT NULL FK → `clients` |
 | `service_plan_id` | `uuid` | NOT NULL FK → `service_plans` |
 | `cms_instance_id` | `uuid` | NULL |
 | `status` | `text` | NOT NULL (`trial`, `active`, `past_due`, `paused`, `cancelled`, `expired`) |
@@ -955,6 +1031,8 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `cancel_at_period_end` | `boolean` | NOT NULL DEFAULT false |
 | `grace_period_days` | `int` | NULL — configurable (OD-10 R1) |
 | … | | |
+
+Also **`UNIQUE (client_id, id)`**. When `cms_instance_id` set: composite FK `(client_id, cms_instance_id) → cms_instances (client_id, id)`.
 
 **OD-10 R1:** Dunning may set `past_due` and notify. It must **not** automatically disconnect the client’s public website or CMS runtime. Any suspension of OkangGroup **management** services requires an authorised decision (§3.4.1).
 
@@ -981,7 +1059,9 @@ Ordinary client CMS publish tasks must not require Owner for every step; Operati
 | `fx_rate` / `fx_rate_as_of` | | optional |
 | `voided_at` / `void_reason` | | void preserves `invoice_number` in audit history |
 
-`invoice_lines`: `invoice_id`, `description`, `quantity`, `unit_amount`, `line_total`, tax fields as needed, optional `service_plan_id`.
+Also **`UNIQUE (client_id, id)`**. Composite FKs to `contracts` / `subscriptions` when those ids are set (§3.3.1.2).
+
+`invoice_lines`: denormalised `client_id`, `invoice_id`, `description`, `quantity`, `unit_amount`, `line_total`, tax fields as needed, optional `service_plan_id`; composite FK `(client_id, invoice_id) → invoices (client_id, id)`.
 
 Pricing overrides are per contract/subscription row — never mutate past invoices when `service_plans.default_amount` changes.
 
@@ -1062,6 +1142,8 @@ Parallel structures referencing `invoice_id` / `payment_records.id` with immutab
 | `satisfaction_score` | `int` | NULL CHECK 1–5 |
 | … | | |
 
+Also **`UNIQUE (client_id, id)`**. Optional links to project/cms/monitored_service use composite FKs when set (§3.3.1.2).
+
 Default statuses: `new` → `assigned` → `in_progress` → `awaiting_client` → `resolved` → `closed` (configurable).
 
 #### `ticket_messages`
@@ -1069,8 +1151,9 @@ Default statuses: `new` → `assigned` → `in_progress` → `awaiting_client` �
 | Column | Type | Constraints |
 | --- | --- | --- |
 | `id` | `uuid` | PK |
-| `ticket_id` | `uuid` | NOT NULL FK ON DELETE CASCADE |
+| `ticket_id` | `uuid` | NOT NULL |
 | `client_id` | `uuid` | NOT NULL |
+| Composite FK | | `(client_id, ticket_id) → tickets (client_id, id)` ON DELETE CASCADE |
 | `author_profile_id` | `uuid` | NULL |
 | `visibility` | `text` | NOT NULL CHECK IN (`client_visible`, `internal`) |
 | `body` | `text` | NOT NULL |
@@ -1233,7 +1316,93 @@ Indexes: `(client_id, created_at DESC)`, `(actor_profile_id, created_at DESC)`, 
 | `summary` | `text` | NULL |
 | … | | |
 
-Owner actions are audited the same as any privileged actor. Contractual/legal restrictions on client PII are enforced via permissions + scope + application checks — Owner role is not a silent bypass for excluded sensitive CMS modules ([OD-08](#14-open-decisions)).
+Owner actions are audited the same as any privileged actor. Contractual/legal restrictions on client PII are enforced via permissions + scope + application checks — Owner role is not a silent bypass for excluded sensitive CMS modules (OD-08 A).
+
+#### Retention and deletion governance (Amendment A3 — OD-04 remains OPEN)
+
+These tables support the **proposed** §16 framework. **No retention schedule is approved.** Purge jobs must not run until OD-04 is closed. Ownership: Owner / designated Data Protection role; Configuration Studio may draft policy versions but cannot approve them without recorded authority.
+
+##### `retention_policies`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `category_id` | `text` | NOT NULL UNIQUE (e.g. `RET-FIN`) |
+| `owner_role_code` | `text` | NOT NULL |
+| `status` | `text` | NOT NULL DEFAULT `draft` (`draft`, `active`, `retired`) |
+| `current_version_id` | `uuid` | NULL FK → `retention_policy_versions` |
+| … | | |
+
+**Security:** SELECT for `security.retention.read` / platform admin; INSERT/UPDATE only DPO/Owner path. Not client-visible.
+
+##### `retention_policy_versions`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `retention_policy_id` | `uuid` | NOT NULL FK → `retention_policies` |
+| `version_no` | `int` | NOT NULL |
+| `schedule_snapshot_json` | `jsonb` | NOT NULL — periods, basis classes, record-type rules |
+| `effective_from` | `timestamptz` | NULL until approved |
+| `review_by` | `date` | NULL |
+| `approved_by` | `uuid` | NULL FK → `profiles` |
+| `approved_at` | `timestamptz` | NULL |
+| `supersedes_version_id` | `uuid` | NULL |
+| … | | |
+
+UNIQUE (`retention_policy_id`, `version_no`). Append-oriented: no silent shorten below verified statutory/contract minima (§16.3). **Until OD-04 approval, no version may be `active` for purge execution.**
+
+##### `retention_record_types`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `category_id` | `text` | NOT NULL |
+| `record_type_code` | `text` | NOT NULL |
+| `label` | `text` | NOT NULL |
+| `rules_json` | `jsonb` | NOT NULL DEFAULT `{}` — subtype overrides (§16.1.1) |
+| `status` | `text` | NOT NULL DEFAULT `active` |
+| UNIQUE | | (`category_id`, `record_type_code`) |
+
+##### `legal_holds`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `matter_ref` | `text` | NOT NULL |
+| `scope_json` | `jsonb` | NOT NULL — client_id / entity_type / entity_id / category / record_type |
+| `placed_by` | `uuid` | NOT NULL FK → `profiles` |
+| `placed_at` | `timestamptz` | NOT NULL DEFAULT now() |
+| `released_at` | `timestamptz` | NULL |
+| `released_by` | `uuid` | NULL |
+| `reason` | `text` | NOT NULL |
+| … | | |
+
+**Security:** tightly restricted (`security.legal_hold.manage`). Active holds block purge (§16.4).
+
+##### `deletion_requests` / `deletion_approvals`
+
+| `deletion_requests` column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `scope_json` | `jsonb` | NOT NULL |
+| `category_id` | `text` | NOT NULL |
+| `policy_version_id` | `uuid` | NULL FK → `retention_policy_versions` |
+| `requested_by` | `uuid` | NOT NULL |
+| `status` | `text` | `draft`, `pending_approval`, `approved`, `cancelled`, `executing`, `completed`, `failed` |
+| `cancellable_until_execution` | | true until execution starts (§16.5 Amendment C) |
+| `executed_at` | `timestamptz` | NULL — after this, no undelete promise |
+
+| `deletion_approvals` column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` | PK |
+| `deletion_request_id` | `uuid` | NOT NULL FK |
+| `approver_profile_id` | `uuid` | NOT NULL — must ≠ requester |
+| `decision` | `text` | `approved`, `rejected` |
+| `decided_at` | `timestamptz` | NOT NULL |
+| `note` | `text` | NULL |
+
+**Relationships:** policies 1—n versions; versions referenced by deletion requests; legal holds independent but consulted by purge eligibility. **Not tenant-composite parents** (platform security domain). Client scope appears only inside `scope_json` / hold scope for filtering — RLS: staff with security permissions; never client portal.
 
 ---
 
@@ -1540,8 +1709,8 @@ Migrations are named for future implementation. **None are applied in this phase
 | M1 | M0 | `profiles`, `invitations`, `account_status_events`; profile linkage rules | RLS + policies for identity tables; deny hard-delete paths for ordinary roles |
 | M2 | M1 | Permissions domain tables; seed system permissions/roles; **core `private.*` predicates** + EXECUTE grants | RLS on grant tables; helpers usable by later policies |
 | M3 | M1–M2 | `departments`, `teams`, `job_titles`, `staff_memberships` | RLS for org tables |
-| M4 | M2 | `clients`, `client_contacts`, `client_memberships`, `client_services`; `UNIQUE (client_id, id)` pattern begins | RLS + tenant isolation for client directory |
-| M5 | M4 | `service_plans`, quotations, contracts, subscriptions, invoices, lines; composite tenant FKs | RLS for commercial tables (`finance.*`) |
+| M4 | M2 | **Tenant root** `clients` (PK `id` only — no `UNIQUE (client_id, id)` on root); plus `client_contacts`, `client_memberships`, `client_services` with `client_id → clients(id)` and `UNIQUE (client_id, id)` on those **child** parents that will be composite-FK targets (§3.3.1.1) | RLS + tenant isolation for client directory |
+| M5 | M4 | `service_plans`, `tax_profiles`, `tax_profile_rates`, quotations, contracts, subscriptions, invoices, lines; `UNIQUE (client_id, id)` on client-scoped commercial parents + composite tenant FKs | RLS for commercial tables (`finance.*`) |
 | M6 | M4–M5 | Projects + children; `UNIQUE (client_id, id)` + composite FKs | RLS for project tables |
 | M7 | M4 | CMS registry tables; composite FKs; credential_ref isolation constraints | RLS for registry; no secret plaintext; deny cross-client CMS links |
 | M8 | M2 | Company CMS tables + `contact_enquiries` | RLS for company CMS; public insert path for enquiries carefully scoped |
@@ -1550,7 +1719,7 @@ Migrations are named for future implementation. **None are applied in this phase
 | M11 | M4 | Tickets, messages, incidents; composite FKs | RLS + internal vs client_visible message split |
 | M12 | M4–M7 | Monitoring tables | RLS; probes write via service role only |
 | M13 | M1–M2 | Notifications stack | RLS (users see own notifications) |
-| M14 | M1–M2 | `audit_events`, `access_reviews`, `security_incidents` with snapshot columns + SET NULL actor FKs; audit triggers on critical tables already present | RLS: append/insert via trigger or service role; SELECT limited; no UPDATE/DELETE for users |
+| M14 | M1–M2 | `audit_events`, `access_reviews`, `security_incidents`; retention governance tables (`retention_policies`, `retention_policy_versions`, `retention_record_types`, `legal_holds`, `deletion_requests`, `deletion_approvals`) — **schedules not approved until OD-04**; snapshot columns + SET NULL actor FKs; audit triggers | RLS: append/insert via trigger or service role; SELECT limited; purge tables Owner/DPO only; no user DELETE on audit |
 | M15 | M2 | Configuration Studio tables; workflow/lookup seeds; validation constraints for OD-05 A | RLS for settings/flags/workflows |
 | M16 | M0–M15 | **Hardening only:** security regression tests checklist artefacts (design), Storage bucket policy completion for buckets first used in app phase, advisor remediations, optional policy performance indexes — **not** the first enablement of table RLS | Confirms no table lacks RLS; does not introduce delayed first protection |
 
@@ -1609,6 +1778,7 @@ Before any production migration apply:
 | 2.1.6 | 2026-10-11 | Proposed OD-04 retention schedule, triggers, legal holds, deletion/backup controls (§16). OD-04 not approved/not closed |
 | 2.1.7 | 2026-10-11 | Retention refinements: record-type (not only table) rules; policy owner/version/review governance; deletion reversible only pre-execution; UK/Ghana legal verification checklist. Periods unchanged. **OD-04 open. Legal verification not claimed. Not frozen.** |
 | 2.1.7-R | 2026-10-11 | Companion technical readiness report for §16.8 checks. OD-04 still open; Supabase MCP unresolved; freeze not authorised |
+| 2.1.8 | 2026-10-11 | Documentation amendments A1 (exhaustive composite parents/FKs), A2 (M4 tenant-root wording), A3 (tax + retention/deletion governance inventory). OD-04 remains OPEN. Not frozen |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -1953,7 +2123,8 @@ These decisions do **not** authorise SQL migrations, application code, merge to 
 - [x] **OD-04:** V2.1.7 refinements (record-type, governance, deletion irreversibility, legal checklist) — **still not approved**
 - [ ] **OD-04:** Complete §16.9 legal verification; Owner approves or amends schedule
 - [x] Final technical checks (§16.8) design-only pass/amend/block report published — **freeze not authorised**
-- [ ] Design amendments A1–A3 from readiness report (before freeze)
+- [x] Design amendments A1–A3 documented in V2.1.8
+- [ ] **OD-04** legal verification + approval (still open)
 - [ ] Supabase MCP access to `prbgsnxpwyepdggdysnt` confirmed
 - [ ] Freeze V2.1 explicitly (not done)
 - [ ] Authorise a future coding phase explicitly (not done)
@@ -2094,24 +2265,24 @@ Design tables (future, not created now): `retention_policies`, `retention_policy
 
 ### 16.8 Final technical checks before freeze
 
-Design-only review **executed** 2026-10-11 against V2.1.7. Full results:
+Design-only review executed against V2.1.7; **A1–A3 closed in V2.1.8**. Updated results:
 
-→ **[okanggroup-v2.1-technical-readiness-report.md](./okanggroup-v2.1-technical-readiness-report.md)**
+→ **[okanggroup-v2.1-technical-readiness-report.md](./okanggroup-v2.1-technical-readiness-report.md)** (revision 2)
 
-| # | Check | Result |
+| # | Check | Result (post V2.1.8) |
 | --- | --- | --- |
-| 1 | Table relationships and foreign keys | **AMENDMENT REQUIRED** |
+| 1 | Table relationships and foreign keys | **PASS** (docs; A1 done) |
 | 2 | Tenant-isolation constraints | **PASS** |
 | 3 | RLS policies and private helper permissions | **PASS** (design) |
-| 4 | MFA and invitation security | **PASS** (design; OD-15 infra dependency) |
-| 5 | Audit preservation and retention | **AMENDMENT REQUIRED** (OD-04 open) |
+| 4 | MFA and invitation security | **PASS** (design; OD-15 operational) |
+| 5 | Audit preservation and retention | **PASS** inventory (A3); **OD-04 still OPEN** |
 | 6 | CMS integration boundaries | **PASS** (V2.1 scope) |
-| 7 | Migration dependencies | **PASS** |
+| 7 | Migration dependencies | **PASS** (A2 M4 wording) |
 | 8 | Supabase Free-tier limitations | **PASS** (guidance) |
 | 9 | Correct Supabase project access | **BLOCKED** |
 | 10 | Compatibility with existing Vite website | **PASS** |
 
-OD-04 is **not** marked complete by this review. Freeze is **not** authorised.
+OD-04 is **not** marked complete. Freeze is **not** authorised.
 
 ### 16.9 Legal verification checklist (NOT COMPLETED)
 
@@ -2168,4 +2339,4 @@ When counsel answers are received, update a new architecture revision that:
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.7 (+ readiness report pointer) — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.8 — under review on branch `docs/architecture-v2.1-review`. A1–A3 documentation complete. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**

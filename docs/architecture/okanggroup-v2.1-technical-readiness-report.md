@@ -3,12 +3,14 @@
 | Field | Value |
 | --- | --- |
 | Report date | 2026-10-11 |
-| Architecture baseline | [okanggroup-database-v2.1.md](./okanggroup-database-v2.1.md) **V2.1.7** |
-| Checklist source | §16.8 (ten design-only checks; formerly referred to as §16.7 in earlier drafts) |
+| Report revision | **2** (post V2.1.8 A1–A3) |
+| Architecture baseline | [okanggroup-database-v2.1.md](./okanggroup-database-v2.1.md) **V2.1.8** |
+| Checklist source | §16.8 |
 | Review type | **Design-only** — no migrations, no live schema application, no application code |
 | OD-04 | **OPEN** — not marked complete |
-| Supabase MCP | **Not assumed fixed** — verified still wrong account during this review |
-| Architecture freeze | **NOT authorised by this report** |
+| Supabase MCP | **Not assumed fixed** — must not use `vzgfvzzbgrlxvixejmdt` |
+| Designated Supabase | `okanggroup-platform` / `prbgsnxpwyepdggdysnt` / `okanggroup@gmail.com` / London Free |
+| Architecture freeze | **NOT authorised** |
 | Coding | **HOLD** |
 
 ---
@@ -17,56 +19,45 @@
 
 | Verdict | Detail |
 | --- | --- |
-| Design direction | Sound; suitable as working technical specification |
-| Ready to freeze V2.1? | **No** — blockers remain (see §3) |
-| Ready to implement? | **No** — coding HOLD; blockers + amendments |
+| Design direction | Sound; V2.1.8 closes documentation amendments A1–A3 |
+| Ready to freeze V2.1? | **No** — remaining blockers in §3 |
+| Ready to implement? | **No** — coding HOLD |
 | OD-04 | Remains open; legal verification not completed |
 
-**Summary counts**
+**Summary counts (after V2.1.8)**
 
 | Result | Count |
 | --- | --- |
-| PASS | 5 |
-| AMENDMENT REQUIRED | 3 |
-| BLOCKED | 2 |
+| PASS | 8 |
+| AMENDMENT REQUIRED | 0 (A1–A3 completed in docs) |
+| BLOCKED | 2 (Supabase MCP; OD-04 / freeze governance) |
 
 ---
 
-## 2. Ten design-only checks
+## 2. Ten design-only checks (updated)
 
 ### Check 1 — Table relationships and foreign keys
 
-| Result | **AMENDMENT REQUIRED** |
+| Result | **PASS** (documentation) |
 | --- | --- |
 
-**Evidence**
+**V2.1.8 evidence**
 
-- Domain map (§2) and Domain 1–15 contracts define primary entities, actor FKs, and many parent/child links.
-- §3.3.1 mandates composite tenant FKs and `UNIQUE (client_id, id)` on client-scoped parents.
-- Explicit `UNIQUE (client_id, id)` is only restated on `projects` and `cms_instances` in domain sections; **not** restated on `contracts`, `invoices`, `subscriptions`, `tickets`, `quotations`, etc., even though §3.3.1 lists them as requiring the pattern.
-- M4 text says `UNIQUE (client_id, id)` pattern “begins” on `clients` — incorrect: `clients` is the tenant root (`id` PK); the composite uniqueness pattern applies to **children of** `clients`, not to `clients` itself.
-- Retention/governance tables named in §16 (`retention_policies`, `legal_holds`, `deletion_requests`, tax profiles implied by OD-03) are **not** yet inventoried in Domain 15’s core table list.
+- §3.3.1 / §3.3.1.1 exhaustive parent list with `UNIQUE (client_id, id)` (and partial uniques where `client_id` nullable).
+- §3.3.1.2 mandatory composite FK patterns; single-column FK to tenant parent alone **forbidden**.
+- `clients` documented as **tenant root** only.
+- Domain restatements on commercial, CRM, support tables; A3 tables inventoried.
 
-**Required amendment (design doc, not code)**
-
-1. Exhaustive list of every client-scoped parent that must declare `UNIQUE (client_id, id)`.  
-2. Correct M4 wording.  
-3. Add Domain 15 (or Security) inventory rows for retention/tax supporting tables before freeze.
+**Runtime note:** SQL not written/applied (coding HOLD).
 
 ---
 
 ### Check 2 — Tenant-isolation constraints
 
-| Result | **PASS** (with follow-on from Check 1) |
+| Result | **PASS** |
 | --- | --- |
 
-**Evidence**
-
-- §3.3 / §3.3.1 / §3.3.2: `client_id`, composite FKs, nullable parents, `is_internal` CHECKs, immutable `client_id`.
-- OD-06 R1 internal tasks without fictional client.
-- OD-08 A + §6.5 contractual non-override for sensitive CMS.
-
-**Note:** PASS on **rules**. Completeness of per-table restatement tracked under Check 1 (AMENDMENT).
+§3.3–§3.3.2 preserved (nullable parents, internal-only, immutable `client_id`).
 
 ---
 
@@ -75,63 +66,34 @@
 | Result | **PASS** (design contract) |
 | --- | --- |
 
-**Evidence**
-
-- §3.10 security-with-table law; §5.1–§5.1.2 privilege model (schema REVOKE, selective EXECUTE, Data API non-exposure, `SECURITY DEFINER` + `search_path`, FORCE RLS).
-- §10 co-locates RLS with each migration; M16 hardening-only.
-- Policy families in §5.2.
-
-**Limitation (not a silent PASS of runtime):** Actual SQL policies are not written or applied. This check passes the **design** only. Runtime proof remains future work after coding authorisation.
+§5.1–§5.1.2 / §3.10 unchanged. Runtime testing later.
 
 ---
 
 ### Check 4 — MFA and invitation security
 
-| Result | **PASS** (design) / infrastructure dependency noted |
+| Result | **PASS** (design) |
 | --- | --- |
 
-**Evidence**
-
-- OD-11 A: MFA mandatory for Owner, Platform Admin, finance, sensitive permissions; fail-closed language on `profiles`.
-- OD-12 A: email invite + hashed token + password setup; magic link later.
-- Invitations table with expiry/revoke/accept.
-
-**Dependency (not silently approved):** OD-15 R1 (`@okanggroup.com` verified sending) is recorded but **not configured** in this review. That blocks **production invitation delivery**, not the soundness of the invitation schema design. Listed as freeze/infra blocker in §3.
+OD-11 A / OD-12 A unchanged. **OD-15** remains an **operational** dependency for invitation testing (not a database-architecture freeze prerequisite per Owner clarification).
 
 ---
 
 ### Check 5 — Audit preservation and retention
 
-| Result | **AMENDMENT REQUIRED** (retention freeze dependency) |
+| Result | **PASS** (design inventory) / **OD-04 still OPEN** |
 | --- | --- |
 
-**Evidence**
-
-- §3.9 / §3.9.1: SET NULL + actor snapshots; no CASCADE destroying audit/finance history; prefer offboarding.
-- §16 retention framework (V2.1.7): record-types, governance, deletion irreversibility, backup controls — **proposed**.
-- OD-04 **open**; §16.9 legal verification **not completed**.
-
-**Required before treating retention as approved**
-
-- Complete legal verification (§16.9); Owner records OD-04 approval.  
-Until then: **do not** treat deletion schedules as legally approved (per Owner instruction).
-
-**Design amendment:** Ensure Domain inventory includes retention control tables before freeze (ties to Check 1).
+**V2.1.8 evidence:** Domain 14 now includes `retention_policies`, `retention_policy_versions`, `retention_record_types`, `legal_holds`, `deletion_requests`, `deletion_approvals` with ownership and security boundaries. §16 periods remain **UNVERIFIED**. **OD-04 must still be resolved before retention policy freeze.**
 
 ---
 
 ### Check 6 — CMS integration boundaries
 
-| Result | **PASS** (for V2.1 scope) |
+| Result | **PASS** (V2.1 scope) |
 | --- | --- |
 
-**Evidence**
-
-- §6 / §6.5: platform permissions ≠ external CMS AuthZ; credential isolation; contractual restrictions; no sensitive-module ingestion by default.
-- OD-08 A Owner temporary grant cannot override client contractual denial.
-- OD-13 R1 company CMS first, then one client CMS — V2.3 for protocol detail.
-
-**Note:** Deeper protocol/token design is correctly deferred to V2.3; not a silent approval of integration code.
+§6.5 unchanged; V2.3 for protocol detail.
 
 ---
 
@@ -140,26 +102,16 @@ Until then: **do not** treat deletion schedules as legally approved (per Owner i
 | Result | **PASS** |
 | --- | --- |
 
-**Evidence**
-
-- §10 M0–M16 dependency order; security co-located; M2 helpers before later RLS; M16 not first RLS enablement.
-- Maps to V2.0 phases.
-
-**Minor:** Fix M4 wording (Check 1) when amending.
+**V2.1.8 evidence:** M4 wording corrected — `clients` is tenant root; composite uniqueness applies to appropriate **child** parents. M5 includes tax tables; M14 includes retention governance tables.
 
 ---
 
 ### Check 8 — Supabase Free-tier limitations
 
-| Result | **PASS** (guidance adequate; numbers not re-verified live) |
+| Result | **PASS** (guidance) |
 | --- | --- |
 
-**Evidence**
-
-- §9 capacity watchpoints: DB size, high-churn tables, Auth MAU, egress, cron/probes, connections.
-- §16.6 notes Free-tier backup/PITR may force upgrade.
-
-**Limitation:** Current numeric Free-tier quotas were not re-fetched from Supabase docs in this review. Treat §9 as planning triggers; confirm quotas before go-live (not a design-structure failure).
+§9 unchanged; verify live quotas before implementation.
 
 ---
 
@@ -168,13 +120,7 @@ Until then: **do not** treat deletion schedules as legally approved (per Owner i
 | Result | **BLOCKED** |
 | --- | --- |
 
-**Evidence (this review session)**
-
-- MCP `list_projects` returned only `vzgfvzzbgrlxvixejmdt` (“adjeteyokangj-hash's Project”, `eu-west-1`).
-- Designated target remains `prbgsnxpwyepdggdysnt` (`okanggroup-platform`, London) — **not visible / permission denied previously**.
-- No mutations performed; wrong project not used.
-
-**Blocker:** Cannot confirm empty schema, migrations list, or project health on the designated Free-tier London project until MCP authenticates as `okanggroup@gmail.com`.
+Must authenticate MCP as `okanggroup@gmail.com` and reach `prbgsnxpwyepdggdysnt`. **Never substitute** `vzgfvzzbgrlxvixejmdt`. Documentation work must not wait on this, but **implementation must**.
 
 ---
 
@@ -183,54 +129,41 @@ Until then: **do not** treat deletion schedules as legally approved (per Owner i
 | Result | **PASS** |
 | --- | --- |
 
-**Evidence**
-
-- Repo remains Vite static site: `package.json` scripts `dev`/`build`/`preview`; Vite dependency only; `index.html` / `css` / `js` structure.
-- OD-14 A: separate admin app + same-domain routing; public site must work if admin unavailable (§1.3, §14.3).
-- Company CMS must adapt to existing design, not replace it (§ Domain 7).
-
-**Note:** Vercel rewrite configuration is not implemented (correct under coding HOLD). Design compatibility PASS.
+OD-14 A preserved.
 
 ---
 
-## 3. Consolidated blockers to freezing V2.1
+## 3. Amendment status (A1–A3)
 
-These must **not** be silently approved. Each blocks freeze (and therefore implementation authorisation).
-
-| ID | Blocker | Type | Resolution needed |
-| --- | --- | --- | --- |
-| B1 | **OD-04 open** — legal verification (§16.9) not completed; periods UNVERIFIED | Legal / policy | Counsel + Owner approve OD-04 |
-| B2 | **Supabase MCP** authenticated to wrong account; cannot verify `prbgsnxpwyepdggdysnt` | Infrastructure | Re-auth as `okanggroup@gmail.com`; read-only confirm project empty/healthy |
-| B3 | **Design completeness amendments** from Checks 1 & 5 (composite uniqueness restated on all parents; M4 wording; retention/tax tables in domain inventory) | Documentation | Publish V2.1.x amendment commit on review branch |
-| B4 | **OD-15** verified `@okanggroup.com` sending not evidenced as configured | Infrastructure / ops | Configure DNS + provider; does not block schema freeze if Owner accepts freeze without prod mail, but blocks invitation go-live |
-| B5 | **No Owner freeze decision** yet | Governance | Explicit freeze after B1–B3 (and Owner call on B4) |
-
-**Not blockers to design freeze (explicitly out of scope / deferred correctly)**
-
-- Writing actual RLS SQL / applying migrations  
-- V2.2 workflow matrices / V2.3 CMS protocols  
-- Live payment provider (OD-01 R1 manual)  
-- Framework rewrite of Vite site  
-
----
-
-## 4. Amendment backlog (design-only)
-
-| ID | Amendment | Priority |
+| ID | Amendment | Status |
 | --- | --- | --- |
-| A1 | Exhaustive `UNIQUE (client_id, id)` + composite FK checklist for all client-scoped parents | Before freeze |
-| A2 | Correct §10 M4 wording (`clients` is tenant root; pattern applies to children) | Before freeze |
-| A3 | Add Domain 15/Security inventory: `retention_policies`, `retention_policy_versions`, `retention_record_types`, `legal_holds`, `deletion_requests`, `deletion_approvals`; tax profile tables for OD-03 | Before freeze |
-| A4 | Clarify staff invitation CHECK wording (“forbid `client_id`” vs “NULL only”) | Nice-to-have |
-| A5 | After OD-04 approval: mark categories VERIFIED/AMENDED in §16.2 | After legal |
+| A1 | Exhaustive composite parents/FKs + bypass prohibition | **Done in V2.1.8** |
+| A2 | M4 tenant-root wording | **Done in V2.1.8** |
+| A3 | Tax profiles + retention/legal-hold/deletion tables | **Done in V2.1.8** (OD-04 still open) |
+
+---
+
+## 4. Remaining blockers to freezing V2.1
+
+| ID | Blocker | Type | Notes |
+| --- | --- | --- | --- |
+| B1 | **OD-04 open** — §16.9 legal verification incomplete | Legal / policy | Must resolve before retention policy freeze |
+| B2 | **Supabase MCP** wrong account / no access to `prbgsnxpwyepdggdysnt` | Infrastructure | Required before implementation; must not retarget old project |
+| B3 | **No Owner freeze decision** yet | Governance | Explicit freeze after Owner review of V2.1.8 + OD-04 path |
+
+**Not a database freeze blocker (Owner clarification)**
+
+| ID | Item | Notes |
+| --- | --- | --- |
+| O1 | OD-15 verified `@okanggroup.com` email | Operational dependency until invitation testing; document requirements remain (OD-15 R1) |
 
 ---
 
 ## 5. What this report does **not** do
 
-- Does **not** mark OD-04 complete or approved  
+- Does **not** mark OD-04 complete  
 - Does **not** claim legal verification  
-- Does **not** claim Supabase MCP access is fixed  
+- Does **not** claim Supabase MCP is fixed  
 - Does **not** create migrations, apply SQL, write application code, merge to `main`, or deploy  
 - Does **not** freeze V2.1  
 
@@ -238,13 +171,13 @@ These must **not** be silently approved. Each blocks freeze (and therefore imple
 
 ## 6. Recommended Owner sequence
 
-1. Keep legal verification of OD-04 progressing in parallel (§16.9).  
-2. Authorise a short **V2.1.8 design amendment** commit for A1–A3 (documentation only).  
-3. Fix Supabase MCP access; Cursor re-runs read-only project verification.  
+1. Review V2.1.8 A1–A3 amendments on the review branch.  
+2. Continue OD-04 legal verification (§16.9) in parallel.  
+3. Fix Supabase MCP to `okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt` before any implementation.  
 4. Close OD-04 when legal answers land.  
 5. Explicitly freeze V2.1.  
-6. Only then authorise coding (Phase 1 / M0+).  
+6. Only then authorise coding.  
 
 ---
 
-**End of readiness report. Architecture NOT FROZEN. Coding HOLD.**
+**End of readiness report revision 2. Architecture NOT FROZEN. Coding HOLD.**
