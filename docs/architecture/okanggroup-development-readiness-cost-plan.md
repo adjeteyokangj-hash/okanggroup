@@ -2,11 +2,12 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **DOCUMENTATION ONLY — OWNER REVIEW — NOT AN ARCHITECTURE FREEZE — CODING HOLD** |
-| Document version | **1.1.0** |
+| Status | **DOCUMENTATION ONLY — DR-01–DR-07 APPROVED — NOT AN ARCHITECTURE FREEZE — CODING HOLD** |
+| Document version | **1.1.1** |
 | Based on | Database **V2.1.8A**; Workflows **V2.2.2**; CMS integrations **V2.3.1** |
 | Does not modify | Those three accepted baselines (or the production Vite site) |
-| Coding / migrations / deploy | **HOLD** — this report does not authorise them |
+| DR-01–DR-07 | **Owner-approved** 2026-10-11 — establishes direction only |
+| Coding / migrations / deploy | **HOLD** — approval of DR-01–DR-07 does **not** authorise implementation |
 | Architecture freeze | **Not authorised** |
 
 ---
@@ -302,17 +303,19 @@ OkangGroup is “operational” for Release 1 when the Owner can run **internal*
 
 ## 11. Owner decisions (DR-01–DR-07)
 
-| ID | Decision | Recommendation | Status |
-| --- | --- | --- | --- |
-| DR-01 | Accept three-release sequence (ops → business → one client CMS) | Accept | **Pending Owner approval** |
-| DR-02 | Pause further architecture versioning until Release 1 scope locked | Accept | **Pending Owner approval** |
-| DR-03 | Release 1 includes company CMS (+ Vite publish path §3.1); excludes finance and external CMS | Accept | **Pending Owner approval** |
-| DR-04 | Add PA-06 only when scoped invitations require it | Accept | **Pending Owner approval** |
-| DR-05 | Keep PA-03 / PA-I* out of Release 1 | Accept | **Pending Owner approval** |
-| DR-06 | Resolve Supabase authentication (`okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt`) before implementation | Accept | **Pending Owner approval** |
-| DR-07 | Retain-by-default pending legal verification; do not activate automated purging | Accept | **Pending Owner approval** |
+**Owner instruction (2026-10-11):** “Approve DR-01 to DR-07. Keep coding on HOLD.”
 
-These remain **recommendations**, not recorded Owner decisions and not coding authorisation. Coding stays **HOLD** until the Owner explicitly approves and later authorises implementation.
+| ID | Decision | Status |
+| --- | --- | --- |
+| DR-01 | Accept three-release sequence (ops → business → one client CMS) | **Approved** |
+| DR-02 | Pause further architecture versioning until Release 1 scope locked | **Approved** |
+| DR-03 | Release 1 includes company CMS (+ Vite publish path §3.1); excludes finance and external CMS | **Approved** |
+| DR-04 | Add PA-06 only when scoped invitations require it | **Approved** |
+| DR-05 | Keep PA-03 / PA-I* out of Release 1 | **Approved** |
+| DR-06 | Resolve Supabase authentication (`okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt`) before implementation | **Approved** |
+| DR-07 | Retain-by-default pending legal verification; do not activate automated purging | **Approved** |
+
+These decisions set **development direction** only. They do **not** freeze architecture, authorise migrations, application code, or deployment. Coding remains **HOLD** until a separate Owner implementation authorisation.
 
 ---
 
@@ -332,6 +335,7 @@ These remain **recommendations**, not recorded Owner decisions and not coding au
 | Version | Date | Notes |
 | --- | --- | --- |
 | 1.0.0 | 2026-10-11 | Initial Development Readiness and Cost Plan for Owner review |
-| 1.1.0 | 2026-10-11 | CMS→Vite publish + rollback (§3.1); engineering vs infrastructure cost; fixed scope + incremental delivery; DR-01–DR-07 still pending |
+| 1.1.0 | 2026-10-11 | CMS→Vite publish + rollback (§3.1); engineering vs infrastructure cost; fixed scope + incremental delivery |
+| 1.1.1 | 2026-10-11 | Owner approved DR-01–DR-07; coding remains HOLD |
 
-**End of Development Readiness and Cost Plan 1.1.0 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
+**End of Development Readiness and Cost Plan 1.1.1 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
