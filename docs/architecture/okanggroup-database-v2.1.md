@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Status | **DESIGN ONLY — UNDER REVIEW (NOT FROZEN) — CODING HOLD** |
-| Document version | **2.1.8** |
+| Document version | **2.1.8A** |
 | Parent | Platform Architecture V2.0 — Proposed Structure |
-| Working baseline | V2.1.7 retained; V2.1.8 completes documentation amendments **A1–A3** only — **OD-04 still open**; architecture **not frozen** |
+| Working baseline | V2.1.8 A1–A3 retained; **2.1.8A** corrects A1 FK targets to ordinary (non-partial) `UNIQUE (client_id, id)` — **OD-04 still open**; architecture **not frozen** |
 | Supabase project | `okanggroup-platform` |
 | Project ID | `prbgsnxpwyepdggdysnt` |
 | Region | London (`eu-west-2`) |
@@ -180,43 +180,49 @@ Every client-scoped table must include `client_id` (denormalised where needed fo
 
 **Composite foreign-key pattern (required for client-scoped children of tenant resources):**
 
-1. Each **client-scoped parent** that other tables may reference declares `UNIQUE (client_id, id)` in addition to PK on `id` (or a partial unique when `client_id` is nullable — see below).
+1. Each parent that other tables may reference with a **composite tenant FK** declares an ordinary, **non-partial** `UNIQUE (client_id, id)` in addition to PK on `id`.
 2. Children that reference such a parent store both `client_id` and the parent id, and declare a composite FK, e.g. `FOREIGN KEY (client_id, project_id) REFERENCES projects (client_id, id)`.
-3. Optional nullable links follow [§3.3.2](#332-nullable-parent-references-internal-records-and-tenant-immutability). Internal-only rows (`is_internal`, `client_id` NULL) never take composite FKs to client parents.
+3. Optional nullable links follow [§3.3.2](#332-nullable-parent-references-internal-records-and-tenant-immutability). Internal-only rows (`is_internal`, `client_id` NULL) never take composite FKs to client-owned parents (enforced by CHECK constraints).
 4. Application code must not be the sole enforcement of tenant matching. RLS remains required, but **database constraints are mandatory** for cross-client integrity.
 
-##### 3.3.1.1 Exhaustive client-scoped parents requiring `UNIQUE (client_id, id)`
+##### 3.3.1.1 Exhaustive parents requiring ordinary `UNIQUE (client_id, id)` (V2.1.8A)
 
-| Parent table | Domain | Notes |
-| --- | --- | --- |
-| `projects` | 5 | Required |
-| `project_deliverables` | 5 | Required if any FK targets deliverable id with tenant check |
-| `milestones` | 5 | Required if referenced by tasks/approvals with tenant check |
-| `change_requests` | 5 | Required if referenced with tenant check |
-| `project_documents` | 5 | Required if referenced with tenant check |
-| `cms_instances` | 6 | Required |
-| `cms_modules` | 6 | Required |
-| `cms_connections` | 6 | Required |
-| `cms_migrations` | 6 | Required |
-| `client_services` | 4 | Required |
-| `client_contacts` | 4 | Required if memberships/portal links use composite tenant checks |
-| `quotations` | 9 | Required |
-| `contracts` | 9 | Required |
-| `subscriptions` | 9 | Required |
-| `invoices` | 9 | Required |
-| `tickets` | 11 | Required |
-| `incidents` | 11 | Required when `client_id` NOT NULL — use **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` if platform-wide incidents allowed |
-| `payment_records` | 10 | Required |
-| `credit_notes` | 10 | Required |
-| `refunds` | 10 | Required |
-| `expenses` | 10 | Required when `client_id` NOT NULL — partial unique if internal expenses allowed |
-| `tasks` | 8 | Required when `client_id` NOT NULL — **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` (OD-06 internal tasks) |
-| `approvals` | 8 | Required when `client_id` NOT NULL — partial unique if platform-wide approvals exist |
-| `monitored_services` | 12 | Required when `client_id` NOT NULL — **partial** unique `(client_id, id) WHERE client_id IS NOT NULL` |
+**PostgreSQL rule (mandatory):** A foreign key may only reference a primary key or a **non-partial** unique constraint. Therefore composite FKs on `(client_id, id)` **must not** target a partial unique index such as `UNIQUE (client_id, id) WHERE client_id IS NOT NULL`.
+
+**Nullable `client_id` on the parent:** Use a normal `UNIQUE (client_id, id)`. In PostgreSQL, `NULL` values are treated as distinct for unique constraints, so multiple internal rows with `client_id IS NULL` are allowed. Internal rows still must not reference client-owned parents (§3.3.2 CHECKs).
+
+| Parent table | Domain | `UNIQUE (client_id, id)` | Notes |
+| --- | --- | --- | --- |
+| `projects` | 5 | Ordinary unique — required | Always client-scoped |
+| `project_deliverables` | 5 | Ordinary unique — required if FK-targeted | |
+| `milestones` | 5 | Ordinary unique — required if FK-targeted | |
+| `change_requests` | 5 | Ordinary unique — required if FK-targeted | |
+| `project_documents` | 5 | Ordinary unique — required if FK-targeted | |
+| `cms_instances` | 6 | Ordinary unique — required | |
+| `cms_modules` | 6 | Ordinary unique — required | |
+| `cms_connections` | 6 | Ordinary unique — required | |
+| `cms_migrations` | 6 | Ordinary unique — required | |
+| `client_services` | 4 | Ordinary unique — required | |
+| `client_contacts` | 4 | Ordinary unique — required if FK-targeted | |
+| `quotations` | 9 | Ordinary unique — required | |
+| `contracts` | 9 | Ordinary unique — required | |
+| `subscriptions` | 9 | Ordinary unique — required | |
+| `invoices` | 9 | Ordinary unique — required | |
+| `tickets` | 11 | Ordinary unique — required | |
+| `incidents` | 11 | Ordinary unique — required | May have `client_id` NULL for platform-wide incidents; NULLs allowed under ordinary unique |
+| `payment_records` | 10 | Ordinary unique — required | |
+| `credit_notes` | 10 | Ordinary unique — required | |
+| `refunds` | 10 | Ordinary unique — required | |
+| `expenses` | 10 | Ordinary unique — required | May have `client_id` NULL for internal expenses |
+| `tasks` | 8 | Ordinary unique — required | OD-06 internal tasks use `client_id` NULL; CHECKs block client parent FKs |
+| `approvals` | 8 | Ordinary unique — required | May have `client_id` NULL for platform-wide approvals |
+| `monitored_services` | 12 | Ordinary unique — required | OkangGroup-owned monitors may use `client_id` NULL |
+
+**Forbidden as FK targets:** Partial unique indexes / constraints of the form `UNIQUE (client_id, id) WHERE client_id IS NOT NULL` (or any other partial unique used as a composite FK reference).
 
 ##### 3.3.1.2 Required composite FK examples (non-exhaustive but mandatory where the link exists)
 
-| Child | Composite FK |
+| Child | Composite FK (references ordinary unique on parent) |
 | --- | --- |
 | `project_deliverables`, `milestones`, `change_requests`, `project_documents` | `(client_id, project_id) → projects (client_id, id)` |
 | `cms_modules`, `cms_connections`, `cms_migrations` | `(client_id, cms_instance_id) → cms_instances (client_id, id)` |
@@ -225,8 +231,8 @@ Every client-scoped table must include `client_id` (denormalised where needed fo
 | `invoice_lines` | `(client_id, invoice_id) → invoices` (denormalise `client_id` onto lines) |
 | `payment_records`, `credit_notes`, `refunds` | `(client_id, invoice_id) → invoices` when invoice set |
 | `ticket_messages` | `(client_id, ticket_id) → tickets` |
-| Client-scoped `tasks` | `(client_id, project_id)` / `(client_id, cms_instance_id)` when those parents set |
-| `health_checks`, client `alerts` | `(client_id, monitored_service_id) → monitored_services` when service is client-scoped |
+| Client-linked `tasks` | `(client_id, project_id)` / `(client_id, cms_instance_id)` when those parents set; **not** used when task is internal (`client_id` NULL) |
+| Client-linked `health_checks` / `alerts` | `(client_id, monitored_service_id) → monitored_services` when the service row is client-scoped (`client_id` NOT NULL on both sides) |
 
 **Bypass prohibition:** No single-column FK to a tenant parent’s `id` alone is sufficient for client-scoped data. A lone `project_id → projects(id)` without matching `client_id` is **forbidden** on client-scoped children.
 
@@ -1779,6 +1785,7 @@ Before any production migration apply:
 | 2.1.7 | 2026-10-11 | Retention refinements: record-type (not only table) rules; policy owner/version/review governance; deletion reversible only pre-execution; UK/Ghana legal verification checklist. Periods unchanged. **OD-04 open. Legal verification not claimed. Not frozen.** |
 | 2.1.7-R | 2026-10-11 | Companion technical readiness report for §16.8 checks. OD-04 still open; Supabase MCP unresolved; freeze not authorised |
 | 2.1.8 | 2026-10-11 | Documentation amendments A1 (exhaustive composite parents/FKs), A2 (M4 tenant-root wording), A3 (tax + retention/deletion governance inventory). OD-04 remains OPEN. Not frozen |
+| 2.1.8A | 2026-10-11 | A1 correction: composite FKs must reference ordinary non-partial `UNIQUE (client_id, id)`; remove partial-unique-as-FK-target guidance. OD-04 OPEN. Not frozen |
 
 ### 13.1 V2.1.3 review amendment register
 
@@ -2271,7 +2278,7 @@ Design-only review executed against V2.1.7; **A1–A3 closed in V2.1.8**. Update
 
 | # | Check | Result (post V2.1.8) |
 | --- | --- | --- |
-| 1 | Table relationships and foreign keys | **PASS** (docs; A1 done) |
+| 1 | Table relationships and foreign keys | **PASS** (docs; A1 + **2.1.8A** non-partial unique FK targets) |
 | 2 | Tenant-isolation constraints | **PASS** |
 | 3 | RLS policies and private helper permissions | **PASS** (design) |
 | 4 | MFA and invitation security | **PASS** (design; OD-15 operational) |
@@ -2339,4 +2346,4 @@ When counsel answers are received, update a new architecture revision that:
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.8 — under review on branch `docs/architecture-v2.1-review`. A1–A3 documentation complete. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.8A — under review on branch `docs/architecture-v2.1-review`. A1 corrected for PostgreSQL FK rules. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**

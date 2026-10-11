@@ -3,8 +3,8 @@
 | Field | Value |
 | --- | --- |
 | Report date | 2026-10-11 |
-| Report revision | **2** (post V2.1.8 A1–A3) |
-| Architecture baseline | [okanggroup-database-v2.1.md](./okanggroup-database-v2.1.md) **V2.1.8** |
+| Report revision | **3** (post V2.1.8A A1 FK correction) |
+| Architecture baseline | [okanggroup-database-v2.1.md](./okanggroup-database-v2.1.md) **V2.1.8A** |
 | Checklist source | §16.8 |
 | Review type | **Design-only** — no migrations, no live schema application, no application code |
 | OD-04 | **OPEN** — not marked complete |
@@ -19,7 +19,7 @@
 
 | Verdict | Detail |
 | --- | --- |
-| Design direction | Sound; V2.1.8 closes documentation amendments A1–A3 |
+| Design direction | Sound; V2.1.8 A1–A3 closed; **V2.1.8A** fixes A1 PostgreSQL FK/unique rule |
 | Ready to freeze V2.1? | **No** — remaining blockers in §3 |
 | Ready to implement? | **No** — coding HOLD |
 | OD-04 | Remains open; legal verification not completed |
@@ -41,12 +41,14 @@
 | Result | **PASS** (documentation) |
 | --- | --- |
 
-**V2.1.8 evidence**
+**V2.1.8 / 2.1.8A evidence**
 
-- §3.3.1 / §3.3.1.1 exhaustive parent list with `UNIQUE (client_id, id)` (and partial uniques where `client_id` nullable).
+- §3.3.1 / §3.3.1.1 exhaustive parent list with ordinary **non-partial** `UNIQUE (client_id, id)` on every composite-FK parent (including `tasks`, `monitored_services`, `incidents`, `expenses`, `approvals` that allow `client_id` NULL).
+- **Corrected:** PostgreSQL FKs cannot reference partial unique indexes; partial-unique-as-FK-target guidance **removed** in V2.1.8A.
+- Nullable internal rows remain valid under ordinary unique (NULL distinct) + §3.3.2 CHECKs (no client parent links when internal).
 - §3.3.1.2 mandatory composite FK patterns; single-column FK to tenant parent alone **forbidden**.
 - `clients` documented as **tenant root** only.
-- Domain restatements on commercial, CRM, support tables; A3 tables inventoried.
+- Domain restatements + A3 inventory retained.
 
 **Runtime note:** SQL not written/applied (coding HOLD).
 
@@ -137,9 +139,9 @@ OD-14 A preserved.
 
 | ID | Amendment | Status |
 | --- | --- | --- |
-| A1 | Exhaustive composite parents/FKs + bypass prohibition | **Done in V2.1.8** |
-| A2 | M4 tenant-root wording | **Done in V2.1.8** |
-| A3 | Tax profiles + retention/legal-hold/deletion tables | **Done in V2.1.8** (OD-04 still open) |
+| A1 | Exhaustive composite parents/FKs + bypass prohibition | **Done in V2.1.8**; **FK/unique correction in V2.1.8A** |
+| A2 | M4 tenant-root wording | **Done in V2.1.8** (accepted) |
+| A3 | Tax profiles + retention/legal-hold/deletion tables | **Done in V2.1.8** (accepted; OD-04 still open) |
 
 ---
 
@@ -180,4 +182,4 @@ OD-14 A preserved.
 
 ---
 
-**End of readiness report revision 2. Architecture NOT FROZEN. Coding HOLD.**
+**End of readiness report revision 3 (V2.1.8A). Architecture NOT FROZEN. OD-04 OPEN. Coding HOLD.**
