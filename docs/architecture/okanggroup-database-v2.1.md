@@ -19,6 +19,7 @@
 | Still open | **OD-04** — §16 proposed; **legal verification not completed**; not approved / not closed |
 | Architecture frozen | **No** |
 | Legal verification claimed | **No** — checklist in §16.9 only |
+| Technical readiness report | [okanggroup-v2.1-technical-readiness-report.md](./okanggroup-v2.1-technical-readiness-report.md) — **not a freeze** |
 
 ---
 
@@ -1950,7 +1951,9 @@ These decisions do **not** authorise SQL migrations, application code, merge to 
 - [x] **OD-04:** proposed retention design published in §16 (V2.1.6) — **not approved**
 - [x] **OD-04:** V2.1.7 refinements (record-type, governance, deletion irreversibility, legal checklist) — **still not approved**
 - [ ] **OD-04:** Complete §16.9 legal verification; Owner approves or amends schedule
-- [ ] Final technical checks (§16.8) after OD-04 agreement
+- [x] Final technical checks (§16.8) design-only pass/amend/block report published — **freeze not authorised**
+- [ ] Design amendments A1–A3 from readiness report (before freeze)
+- [ ] Supabase MCP access to `prbgsnxpwyepdggdysnt` confirmed
 - [ ] Freeze V2.1 explicitly (not done)
 - [ ] Authorise a future coding phase explicitly (not done)
 
@@ -2088,20 +2091,26 @@ Design tables (future, not created now): `retention_policies`, `retention_policy
 | RET-CLIENT-MEDIA | Per-client retention profile; OD-09 export before delete |
 | RET-CMS-PUB | Retain while company site live; decommission runbook |
 
-### 16.8 Final technical checks before freeze (queued — run after OD-04 agreement)
+### 16.8 Final technical checks before freeze
 
-Design-only review checklist (not started):
+Design-only review **executed** 2026-10-11 against V2.1.7. Full results:
 
-1. All table relationships and foreign keys  
-2. Tenant-isolation constraints (§3.3.1–§3.3.2)  
-3. RLS policies and private helper permissions (§5.1–§5.1.2)  
-4. MFA and invitation security (OD-11 A, OD-12 A)  
-5. Audit preservation and retention (§3.9, §16)  
-6. CMS integration boundaries (§6.5)  
-7. Migration dependencies (§10)  
-8. Supabase Free-tier limitations (§9)  
-9. Correct Supabase project access (`prbgsnxpwyepdggdysnt` / `okanggroup@gmail.com`)  
-10. Compatibility with existing Vite website (OD-14 A)
+→ **[okanggroup-v2.1-technical-readiness-report.md](./okanggroup-v2.1-technical-readiness-report.md)**
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | Table relationships and foreign keys | **AMENDMENT REQUIRED** |
+| 2 | Tenant-isolation constraints | **PASS** |
+| 3 | RLS policies and private helper permissions | **PASS** (design) |
+| 4 | MFA and invitation security | **PASS** (design; OD-15 infra dependency) |
+| 5 | Audit preservation and retention | **AMENDMENT REQUIRED** (OD-04 open) |
+| 6 | CMS integration boundaries | **PASS** (V2.1 scope) |
+| 7 | Migration dependencies | **PASS** |
+| 8 | Supabase Free-tier limitations | **PASS** (guidance) |
+| 9 | Correct Supabase project access | **BLOCKED** |
+| 10 | Compatibility with existing Vite website | **PASS** |
+
+OD-04 is **not** marked complete by this review. Freeze is **not** authorised.
 
 ### 16.9 Legal verification checklist (NOT COMPLETED)
 
@@ -2158,4 +2167,4 @@ When counsel answers are received, update a new architecture revision that:
 
 ---
 
-**End of OkangGroup Database Architecture V2.1.7 — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. CODING HOLD remains in effect.**
+**End of OkangGroup Database Architecture V2.1.7 (+ readiness report pointer) — under review on branch `docs/architecture-v2.1-review`. NOT FROZEN. OD-04 OPEN. LEGAL VERIFICATION NOT COMPLETED. SUPABASE MCP UNRESOLVED. CODING HOLD remains in effect.**
