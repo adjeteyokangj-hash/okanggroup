@@ -3,10 +3,10 @@
 | Field | Value |
 | --- | --- |
 | Status | **DOCUMENTATION ONLY — DR-01–DR-07 APPROVED — NOT AN ARCHITECTURE FREEZE — CODING HOLD** |
-| Document version | **1.1.1** |
+| Document version | **1.1.2** |
 | Based on | Database **V2.1.8A**; Workflows **V2.2.2**; CMS integrations **V2.3.1** |
 | Does not modify | Those three accepted baselines (or the production Vite site) |
-| DR-01–DR-07 | **Owner-approved** 2026-10-11 — establishes direction only |
+| DR-01–DR-07 | **Owner-approved** 2026-10-11 — establishes direction only; **DR-06 verified PASS** |
 | Coding / migrations / deploy | **HOLD** — approval of DR-01–DR-07 does **not** authorise implementation |
 | Architecture freeze | **Not authorised** |
 
@@ -40,7 +40,7 @@ This is a planning report for Owner review — not a fourth architecture contrac
 | Item | Impact on build |
 | --- | --- |
 | OD-04 retention | Blocks lawful purge automation; does **not** block building core ops if retain-by-default holds |
-| Supabase MCP / correct project auth (`prbgsnxpwyepdggdysnt`) | Blocks remote verification and safe migration application |
+| Supabase MCP / correct project auth (`prbgsnxpwyepdggdysnt`) | **Resolved (DR-06 PASS)** — workspace MCP connected; still does **not** authorise migrations/coding |
 | C3-01–C3-05 client pilot decisions | Blocks Release 3 only |
 | C3-06 token TTL / revocation SLA confirmation | Must be **tested** in pilot; 15-minute TTL alone does **not** guarantee 60-second revoke — external enforce or gateway-controlled access required (V2.3.1) |
 | Owner freeze + coding authorisation | Nothing ships without these |
@@ -312,7 +312,7 @@ OkangGroup is “operational” for Release 1 when the Owner can run **internal*
 | DR-03 | Release 1 includes company CMS (+ Vite publish path §3.1); excludes finance and external CMS | **Approved** |
 | DR-04 | Add PA-06 only when scoped invitations require it | **Approved** |
 | DR-05 | Keep PA-03 / PA-I* out of Release 1 | **Approved** |
-| DR-06 | Resolve Supabase authentication (`okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt`) before implementation | **Approved** |
+| DR-06 | Resolve Supabase authentication (`okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt`) before implementation | **Approved — VERIFIED PASS** 2026-10-11 via workspace MCP `project-0-OKANGGROUP-supabase` (API host `prbgsnxpwyepdggdysnt.supabase.co`; name/region per Owner connection: `okanggroup-platform` / `eu-west-2`) |
 | DR-07 | Retain-by-default pending legal verification; do not activate automated purging | **Approved** |
 
 These decisions set **development direction** only. They do **not** freeze architecture, authorise migrations, application code, or deployment. Coding remains **HOLD** until a separate Owner implementation authorisation.
@@ -337,5 +337,6 @@ These decisions set **development direction** only. They do **not** freeze archi
 | 1.0.0 | 2026-10-11 | Initial Development Readiness and Cost Plan for Owner review |
 | 1.1.0 | 2026-10-11 | CMS→Vite publish + rollback (§3.1); engineering vs infrastructure cost; fixed scope + incremental delivery |
 | 1.1.1 | 2026-10-11 | Owner approved DR-01–DR-07; coding remains HOLD |
+| 1.1.2 | 2026-10-11 | DR-06 Supabase workspace MCP verification PASS; coding remains HOLD |
 
-**End of Development Readiness and Cost Plan 1.1.1 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
+**End of Development Readiness and Cost Plan 1.1.2 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
