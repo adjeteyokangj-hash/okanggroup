@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | **DOCUMENTATION ONLY — OWNER REVIEW — NOT AN ARCHITECTURE FREEZE — CODING HOLD** |
-| Document version | **1.0.0** |
+| Document version | **1.1.0** |
 | Based on | Database **V2.1.8A**; Workflows **V2.2.2**; CMS integrations **V2.3.1** |
 | Does not modify | Those three accepted baselines (or the production Vite site) |
 | Coding / migrations / deploy | **HOLD** — this report does not authorise them |
@@ -63,7 +63,7 @@ Aligned with the Owner’s three-release recommendation and with V2.1 migration/
 | Org: departments, teams, staff memberships | Placement without fake privilege ladder |
 | Client register (directory + memberships) | Know who the clients are |
 | Projects + tasks + assignments + basic approvals | Day-to-day work |
-| **Company CMS only** (Domain 7: pages, sections, media refs, revisions, publish workflow) | OD-13 Pilot 1; proves content ops on platform data |
+| **Company CMS only** (Domain 7: pages, sections, media refs, revisions, approve → publish) | OD-13 Pilot 1; see §3.1 publish path to existing Vite site |
 | Audit events (append-only) for privileged actions | Non-negotiable accountability |
 | Configuration / lookups / workflow definitions (minimal seeds) | Avoid hard-coding statuses |
 
@@ -77,8 +77,29 @@ Aligned with the Owner’s three-release recommendation and with V2.1 migration/
 | Full support desk productisation (basic internal notes optional) |
 | Retention purge automation (OD-04 still open) |
 | New third-party SaaS beyond current stack |
+| Rewriting the public site’s design, navigation, or framework |
 
-**Release 1 success test:** Owner can sign in with MFA, manage a small staff set, maintain client/project/task records, and publish company website content through the company CMS — while the existing public Vite site remains untouched as the marketing surface (OD-14 A).
+**Fixed scope rule:** Once the Owner locks Release 1, do **not** add features during development unless they fix a genuine defect or security issue. Scope changes require an explicit Owner decision — not ad-hoc expansion.
+
+**Release 1 success test:** Owner can sign in with MFA, manage a small staff set, maintain client/project/task records, approve company CMS content, and complete a **controlled publish** that updates the **existing** Vite public website — with rollback available so a failed publish does not take the public site offline (OD-14 A).
+
+### 3.1 Company CMS → existing Vite website (Release 1 requirement)
+
+Admin save alone is **not** enough. Release 1 must define a low-cost path:
+
+```text
+Company CMS (draft) → Approval → Controlled publishing process → Existing Vite website
+```
+
+| Requirement | Detail |
+| --- | --- |
+| Preserve public site | Keep current website design, navigation, and functionality; no React/Next rewrite (OD-14 A) |
+| Controlled publish | Only **approved** content enters the publish process |
+| Public availability | A failed publish must not take the marketing site offline |
+| Rollback | Retain prior published artefact/version so operators can restore the last good public content quickly |
+| Mechanism choice | Exact technique (e.g. generate static content into the Vite tree, content JSON consumed at build, or equivalent) is chosen in **Release 1 implementation planning** — **not** a new architecture version |
+
+This closes the gap between “CMS stores rows” and “visitors see updates on okanggroup.com”.
 
 ### Release 2 — Business management
 
@@ -169,23 +190,34 @@ Release 1 **skips** M5/M10 (finance), M7 external CMS registry beyond any stub i
 
 ---
 
-## 7. Likely recurring cost drivers
+## 7. Cost drivers — infrastructure vs development
+
+### 7.1 Important distinction
+
+| Category | Examples | Notes |
+| --- | --- | --- |
+| **Infrastructure (low if we stay disciplined)** | Supabase Free, existing Vercel Vite deploy | Reduces hosting spend; **does not** make development free |
+| **Development (principal cost to control)** | Cursor usage, engineering time, rework from scope churn, permission/RLS test-fix cycles, custom client integrations (R3), future hosting upgrades when Free limits hit | Control via **fixed Release 1 scope**, incremental delivery (§9), pause architecture expansion (DR-02) |
+
+### 7.2 Likely recurring / repeatable cost drivers
 
 Supabase Free is the planning assumption (V2.1). Treat published Free limits as triggers — re-verify before go-live.
 
 | Driver | Why it grows | Cost-control tactic |
 | --- | --- | --- |
-| Database size | Clients, tasks, audit, CMS revisions | Keep binaries in Storage; prune drafts; avoid ingesting client CMS content |
-| Auth MAU | Staff + client portal users | Release 1 = staff-heavy only; invite clients later |
-| Storage | Media for company CMS | Compress; don’t mirror client media through platform (V2.1 egress note) |
-| Egress | Admin + CMS media + any proxy | No heavy media proxy; CDN on public Vite stays on Vercel |
-| Edge Functions / cron | Health probes, dunning, revoke hooks | Minimal on Free; Release 3 probes must be gentle |
-| Email sending | Invites, invoices, dunning | Start with low volume transactional only |
-| Engineering time (largest real cost) | Custom client adapters in Release 3 | One pilot; capability withhold; reuse gateway |
-| Paid Supabase / Vercel upgrade | When Free ceilings hit | Defer upgrade until Release 1 metrics justify it |
-| Legal / retention work (OD-04) | Advisor time, not hosting | Resolve before automated delete — cheaper than wrongful erasure |
+| Cursor / engineering time | Building, reviewing, fixing | Fixed R1 scope; small complete increments (§9); no parallel feature sprawl |
+| Repeated architecture changes | Re-spec after coding starts | Pause V2.x expansion until R1 locked (DR-02) |
+| Permissions test-fix | RLS and grant mistakes | Auth + RBAC slice complete before dependent screens |
+| Database size | Clients, tasks, audit, CMS revisions | Storage for binaries; no client CMS content ingest in R1 |
+| Auth MAU | Staff + later client users | R1 staff-heavy only |
+| Storage / egress | Company CMS media | Compress; no heavy proxy; public site on Vercel |
+| Edge Functions / cron | Probes, later dunning | Minimal on Free |
+| Email | Invites, later invoices | Low-volume transactional only |
+| Custom client integrations | Release 3 adapters | One pilot only; withhold if AuthZ weak |
+| Paid Supabase / Vercel upgrade | Free ceilings | Defer until metrics justify |
+| Legal / OD-04 | Advisor time | Retain-by-default in R1; no automated purge |
 
-**Token TTL note (implementation risk, not hosting cost):** A 15-minute token does not deliver a 60-second revoke by itself. Budget pilot **test time** for gateway re-check + external invalidation — failure here is a security cost, not a subscription line item.
+**Token TTL note (R3):** A 15-minute token does not deliver a 60-second revoke by itself. Budget pilot test time for gateway re-check + external invalidation.
 
 ---
 
@@ -232,20 +264,26 @@ Pulling Release 3 schema into Release 1 increases migration and RLS surface area
 
 ---
 
-## 9. Suggested Release 1 build slices (still HOLD)
+## 9. Release 1 delivery style — fixed scope, small increments (still HOLD)
 
-Order matches V2.1 migration dependencies; listed for readiness only:
+**Do not** build all Release 1 screens at once. Keep the **overall Release 1 scope fixed**, and implement **small, complete functional sections** that can be tested before the next section depends on them.
 
-1. Project access + Auth configuration (MFA for Owner)  
-2. M0–M2 private helpers, profiles, roles/grants  
-3. M3 org + M4 clients  
-4. M6 projects + M9 tasks/assignments/approvals  
-5. M8 company CMS + publish approval  
-6. M14 audit (core) + M15 lookup/workflow seeds  
-7. Admin UI shell: login, Owner dashboard MVP, CRUD for above  
-8. Hardening checklist (RLS on every exposed table; no Storage bucket without policies)
+Example order (dependency-safe):
 
-**Not in this list:** client CMS gateway, invoicing, hybrid mode.
+1. Supabase project access + Auth + MFA for Owner (must be secure before anything else)  
+2. M0–M2 private helpers, profiles, roles/grants — **test permissions** before staff UI depends on them  
+3. M3 org + staff memberships (after authz works)  
+4. M4 clients directory  
+5. M6 projects + M9 tasks/assignments/approvals  
+6. M14 audit (core) + M15 lookup/workflow seeds (as needed by above)  
+7. Owner dashboard MVP widgets (read from secured data only)  
+8. M8 company CMS draft/revise/approve  
+9. **Controlled publish → existing Vite site + rollback** (§3.1)  
+10. Hardening checklist (RLS on every exposed table; no Storage bucket without policies)
+
+**Not in this list:** client CMS gateway, invoicing, hybrid mode, redesign of the public Vite site.
+
+This is incremental **delivery**, not incremental **scope expansion**.
 
 ---
 
@@ -262,19 +300,19 @@ OkangGroup is “operational” for Release 1 when the Owner can run **internal*
 
 ---
 
-## 11. Owner decisions requested (from this report)
+## 11. Owner decisions (DR-01–DR-07)
 
-| ID | Decision | Recommendation |
-| --- | --- | --- |
-| DR-01 | Accept three-release sequence (ops → business → one client CMS) | Accept |
-| DR-02 | Pause further architecture versioning until Release 1 scope locked | Accept |
-| DR-03 | Release 1 includes company CMS, excludes finance and external CMS | Accept |
-| DR-04 | Authorise a thin V2.1 revision for PA-06 before wider staff invites | Accept when invites leave Owner-only |
-| DR-05 | Keep PA-03 / PA-I* out of Release 1 | Accept |
-| DR-06 | Priority to unblock Supabase MCP on `okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt` | Accept — gating dependency |
-| DR-07 | OD-04 path: retain-by-default for R1; legal verification in parallel | Accept |
+| ID | Decision | Recommendation | Status |
+| --- | --- | --- | --- |
+| DR-01 | Accept three-release sequence (ops → business → one client CMS) | Accept | **Pending Owner approval** |
+| DR-02 | Pause further architecture versioning until Release 1 scope locked | Accept | **Pending Owner approval** |
+| DR-03 | Release 1 includes company CMS (+ Vite publish path §3.1); excludes finance and external CMS | Accept | **Pending Owner approval** |
+| DR-04 | Add PA-06 only when scoped invitations require it | Accept | **Pending Owner approval** |
+| DR-05 | Keep PA-03 / PA-I* out of Release 1 | Accept | **Pending Owner approval** |
+| DR-06 | Resolve Supabase authentication (`okanggroup@gmail.com` / `prbgsnxpwyepdggdysnt`) before implementation | Accept | **Pending Owner approval** |
+| DR-07 | Retain-by-default pending legal verification; do not activate automated purging | Accept | **Pending Owner approval** |
 
-These are **recommendations for Owner approval**, not recorded architecture decisions and not coding authorisation.
+These remain **recommendations**, not recorded Owner decisions and not coding authorisation. Coding stays **HOLD** until the Owner explicitly approves and later authorises implementation.
 
 ---
 
@@ -294,5 +332,6 @@ These are **recommendations for Owner approval**, not recorded architecture deci
 | Version | Date | Notes |
 | --- | --- | --- |
 | 1.0.0 | 2026-10-11 | Initial Development Readiness and Cost Plan for Owner review |
+| 1.1.0 | 2026-10-11 | CMS→Vite publish + rollback (§3.1); engineering vs infrastructure cost; fixed scope + incremental delivery; DR-01–DR-07 still pending |
 
-**End of Development Readiness and Cost Plan 1.0.0 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
+**End of Development Readiness and Cost Plan 1.1.0 — documentation only. Does not modify accepted architectures. Does not authorise coding. CODING HOLD.**
