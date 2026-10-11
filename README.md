@@ -65,4 +65,4 @@ vercel domains verify www.okanggroup.com --scope adjeteyokangj-hashs-projects
 
 - This site is OkangGroup-branded only. It is not a Noble Express page.
 - Client projects are labelled clearly as client-owned work.
-- Contact details are intentionally omitted until official OkangGroup channels are confirmed.
+- Contact phone/WhatsApp: 07404 865949 (+44 7404 865949). Official email pending (`@okanggroup.com`).

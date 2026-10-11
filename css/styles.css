@@ -643,15 +643,32 @@ p:last-child {
   font-size: 1.05rem;
 }
 
-.contact-soon {
-  margin-top: 1.5rem !important;
-  display: inline-block;
-  padding: 0.85rem 1.1rem;
-  border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.03);
-  font-weight: 700;
+.contact-phone {
+  margin-top: 1.35rem !important;
+  margin-bottom: 0 !important;
+  font-size: 1.05rem !important;
+  font-weight: 600;
   color: var(--white) !important;
+}
+
+.contact-phone a {
+  color: var(--orange);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.25s var(--ease), color 0.25s var(--ease);
+}
+
+.contact-phone a:hover {
+  color: var(--blue-bright);
+  border-bottom-color: var(--blue-bright);
+}
+
+.contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
 }
 
 /* Footer */
@@ -884,6 +901,10 @@ p:last-child {
 
   .contact-panel {
     padding: 2rem 1.35rem;
+  }
+
+  .contact-actions .btn {
+    width: 100%;
   }
 
   .hero-actions .btn,
