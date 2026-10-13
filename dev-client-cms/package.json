@@ -1,0 +1,11 @@
+{
+  "name": "okanggroup-dev-client-cms",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Dedicated NON-PRODUCTION client CMS stub for OkangGroup integration tests. Not a live client application.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  }
+}

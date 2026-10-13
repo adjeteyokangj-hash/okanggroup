@@ -6,10 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:temp-password": "node src/lib/tempPasswordDisplay.test.mjs",
+    "test:mfa": "node src/lib/mfaEnrollment.test.mjs",
+    "test:cms-contrast": "node src/lib/cmsBuilder/contrast.test.mjs",
+    "test:cms-persist": "node src/lib/cmsBuilder/persist.roundtrip.test.mjs",
+    "test:expense-math": "node --experimental-strip-types src/lib/expenseMath.test.mjs",
+    "test:project-ops": "node --experimental-strip-types src/lib/projectOps.test.mjs",
+    "test:signup-quarantine": "node src/lib/signupQuarantine.test.mjs",
+    "test": "npm run test:temp-password && npm run test:mfa && npm run test:cms-contrast && npm run test:cms-persist && npm run test:expense-math && npm run test:project-ops && npm run test:signup-quarantine"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.4.0"

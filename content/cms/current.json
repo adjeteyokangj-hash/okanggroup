@@ -1,0 +1,8 @@
+{
+  "kind": "okanggroup_company_cms_site_bundle",
+  "generated_at": null,
+  "deploy_authorised": false,
+  "pages": [],
+  "navigation": [],
+  "note": "Placeholder until first cms-publish-export run. Public deploy remains Owner-gated."
+}

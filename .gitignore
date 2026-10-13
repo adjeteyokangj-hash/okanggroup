@@ -4,10 +4,15 @@ dist
 *.log
 .env
 .env.*
+!.env.example
 admin/.env
 admin/dist
 admin/node_modules
+admin/tsconfig.tsbuildinfo
+*.tsbuildinfo
+supabase/.temp/
 
 .vercel
-.vercel
 .env*
+!.env.example
+!admin/.env.example

@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/auth';
 
-type Client = { id: string; legal_name: string };
 type Project = {
   id: string;
   code: string;
@@ -9,88 +10,102 @@ type Project = {
   stage: string;
   status: string;
   client_id: string;
+  target_end_on: string | null;
+  clients?: { legal_name: string } | null;
 };
 
 export function ProjectsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+  const { can } = useAuth();
+  const canManage = can('projects.manage');
+  const navigate = useNavigate();
   const [rows, setRows] = useState<Project[]>([]);
-  const [clientId, setClientId] = useState('');
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    const [{ data: c }, { data: p, error: err }] = await Promise.all([
-      supabase.from('clients').select('id, legal_name').order('legal_name'),
-      supabase.from('projects').select('id, code, name, stage, status, client_id').order('name'),
-    ]);
-    setClients((c as Client[]) ?? []);
-    if (err) setError(err.message);
-    else setRows((p as Project[]) ?? []);
-  }
-
   useEffect(() => {
-    void load();
+    void (async () => {
+      const { data, error: err } = await supabase
+        .from('projects')
+        .select('id, code, name, stage, status, client_id, target_end_on, clients(legal_name)')
+        .order('name');
+      if (err) setError(err.message);
+      else {
+        setRows(
+          ((data as Array<Omit<Project, 'clients'> & { clients: Project['clients'] | Project['clients'][] }>) ?? []).map(
+            (row) => ({
+              ...row,
+              clients: Array.isArray(row.clients) ? row.clients[0] ?? null : row.clients,
+            }),
+          ),
+        );
+      }
+    })();
   }, []);
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const { error: err } = await supabase.from('projects').insert({
-      client_id: clientId,
-      code: code.trim(),
-      name: name.trim(),
-      category: 'general',
-      stage: 'enquiry',
-      status: 'open',
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (status !== 'all' && r.status !== status) return false;
+      if (!needle) return true;
+      const clientName = r.clients?.legal_name ?? '';
+      return [r.code, r.name, r.stage, clientName].some((v) => v.toLowerCase().includes(needle));
     });
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setCode('');
-    setName('');
-    await load();
-  }
+  }, [rows, q, status]);
 
   return (
     <section>
       <header className="page-head">
-        <h1>Projects</h1>
-        <p>Client delivery projects (no contract link in Release 1).</p>
+        <div>
+          <h1>Projects</h1>
+          <p>Delivery projects with automatic codes (OKG-PR-######). Open a row for details.</p>
+        </div>
+        {canManage ? (
+          <div className="actions">
+            <Link to="/projects/new">
+              <button type="button">+ Add project</button>
+            </Link>
+          </div>
+        ) : null}
       </header>
-      <form className="inline-form" onSubmit={onCreate}>
-        <select value={clientId} onChange={(e) => setClientId(e.target.value)} required>
-          <option value="">Client…</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.legal_name}
-            </option>
-          ))}
+      <div className="toolbar">
+        <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">All statuses</option>
+          <option value="open">Open</option>
+          <option value="on_hold">On hold</option>
+          <option value="closed">Closed</option>
+          <option value="cancelled">Cancelled</option>
         </select>
-        <input placeholder="Code" value={code} onChange={(e) => setCode(e.target.value)} required />
-        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <button type="submit">Add project</button>
-      </form>
+      </div>
       {error ? <div className="error">{error}</div> : null}
       <table>
         <thead>
           <tr>
             <th>Code</th>
             <th>Name</th>
+            <th>Client</th>
             <th>Stage</th>
             <th>Status</th>
+            <th>Target end</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
+          {filtered.map((r) => (
+            <tr key={r.id} onClick={() => navigate(`/projects/${r.id}`)}>
               <td>{r.code}</td>
               <td>{r.name}</td>
+              <td>{r.clients?.legal_name ?? '—'}</td>
               <td>{r.stage}</td>
               <td>{r.status}</td>
+              <td>{r.target_end_on ?? '—'}</td>
             </tr>
           ))}
+          {filtered.length === 0 ? (
+            <tr>
+              <td colSpan={6}>No projects match.</td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </section>

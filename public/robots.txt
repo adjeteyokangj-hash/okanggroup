@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://okanggroup.com/sitemap.xml

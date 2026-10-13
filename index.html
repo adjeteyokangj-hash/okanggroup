@@ -3,12 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OkangGroup | Innovate. Build. Succeed.</title>
+    <title>OkangGroup | Digital products, websites, apps and business systems</title>
     <meta
       name="description"
-      content="OkangGroup is a digital product and software group that builds practical websites, apps, systems, and platforms for real businesses, communities, and operations."
+      content="OkangGroup designs and builds websites, mobile applications, business software, automation and digital solutions for organisations that need practical systems."
     />
     <meta name="theme-color" content="#071525" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://okanggroup.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OkangGroup" />
+    <meta property="og:url" content="https://okanggroup.com/" />
+    <meta property="og:title" content="OkangGroup | Innovate. Build. Succeed." />
+    <meta
+      property="og:description"
+      content="Practical websites, apps, business systems and digital solutions — built for real operations."
+    />
+    <meta property="og:image" content="https://okanggroup.com/okanggroup-logo.jpg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="OkangGroup" />
+    <meta
+      name="twitter:description"
+      content="Digital product and software group — websites, apps, systems and platforms."
+    />
     <link rel="icon" type="image/jpeg" href="/okanggroup-logo.jpg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,6 +34,19 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "OkangGroup",
+        "url": "https://okanggroup.com/",
+        "logo": "https://okanggroup.com/okanggroup-logo.jpg",
+        "slogan": "Innovate. Build. Succeed.",
+        "description": "Digital product and software group that builds websites, apps, business systems and digital solutions.",
+        "telephone": "+447404865949",
+        "sameAs": []
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#home">Skip to content</a>
@@ -37,15 +67,16 @@
         <nav class="nav" id="primary-nav" aria-label="Primary">
           <a href="#home">Home</a>
           <a href="#about">About</a>
-          <a href="#products">Products</a>
-          <a href="#client-work">Client Work</a>
           <a href="#services">Services</a>
+          <a href="#products">Products</a>
+          <a href="#client-work">Our Work</a>
+          <a href="#how-we-work">How We Work</a>
           <a href="#contact">Contact</a>
+          <a class="nav-portal" href="/admin/login">Client Portal</a>
         </nav>
 
         <div class="header-actions">
-          <a class="btn btn-ghost" href="#client-work">View Our Work</a>
-          <a class="btn btn-primary" href="#contact">Contact OkangGroup</a>
+          <a class="btn btn-primary" href="#contact">Start a project</a>
         </div>
 
         <button
@@ -63,7 +94,7 @@
     </header>
 
     <main>
-      <section class="hero" id="home">
+      <section class="hero" id="home" data-cms-page="home">
         <div class="hero-media" aria-hidden="true">
           <div class="hero-media-glow"></div>
           <img
@@ -77,35 +108,93 @@
         </div>
         <div class="container hero-inner">
           <div class="hero-copy reveal">
-            <h1>OkangGroup</h1>
-            <p class="tagline">Innovate. Build. Succeed.</p>
-            <p class="lede">
-              We design and build practical digital products, websites, mobile
-              apps, and business systems for organisations, communities, and
-              growing businesses.
+            <h1 data-cms-field="title">OkangGroup</h1>
+            <p class="tagline" data-cms-field="tagline">Innovate. Build. Succeed.</p>
+            <p class="lede" data-cms-field="lede">
+              We help organisations turn operational needs into reliable digital
+              systems — websites, mobile applications, business software and
+              automation that people can use every day.
             </p>
             <div class="hero-actions">
-              <a class="btn btn-primary" href="#client-work">View Our Work</a>
-              <a class="btn btn-secondary" href="#contact">Contact OkangGroup</a>
+              <a class="btn btn-primary" href="#contact">Discuss your project</a>
+              <a class="btn btn-secondary" href="#services">Explore services</a>
             </div>
+            <ul class="hero-proof" aria-label="What OkangGroup delivers">
+              <li>Websites &amp; apps</li>
+              <li>Business systems</li>
+              <li>Automation</li>
+              <li>Ongoing support</li>
+            </ul>
+          </div>
+          <div class="hero-aside reveal" style="--delay: 0.08s" aria-hidden="false">
+            <img
+              src="/okanggroup-logo.jpg"
+              alt="OkangGroup"
+              class="hero-logo"
+              width="320"
+              height="320"
+            />
           </div>
         </div>
       </section>
 
-      <section class="section about" id="about">
+      <section class="section value" id="why" aria-labelledby="why-heading">
+        <div class="container">
+          <div class="section-intro reveal">
+            <p class="section-label">Why OkangGroup</p>
+            <h2 id="why-heading">Built for how your organisation actually works</h2>
+            <p>
+              Customers engage OkangGroup when they need more than a brochure
+              site — when bookings, records, staff workflows, client access and
+              reporting have to hang together as one practical platform.
+            </p>
+          </div>
+          <div class="value-grid">
+            <article class="value-item reveal">
+              <h3>Clarity before code</h3>
+              <p>
+                We start with your users, permissions and day-to-day processes so
+                the build matches real operations — not a generic template.
+              </p>
+            </article>
+            <article class="value-item reveal" style="--delay: 0.06s">
+              <h3>End-to-end delivery</h3>
+              <p>
+                From first conversation through planning, development, testing
+                and support, one team stays accountable for the outcome.
+              </p>
+            </article>
+            <article class="value-item reveal" style="--delay: 0.12s">
+              <h3>Systems that last</h3>
+              <p>
+                We design for growth: secure access, structured data and room to
+                extend without throwing away what already works.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section about" id="about" data-cms-page="about">
         <div class="container">
           <div class="section-intro reveal">
             <p class="section-label">About</p>
-            <h2>About OkangGroup</h2>
-            <p>
+            <h2 data-cms-field="title">About OkangGroup</h2>
+            <p data-cms-field="body">
               OkangGroup is a digital product and software group focused on
               building useful platforms for real-world operations. We develop
               our own products and also create systems for selected clients.
             </p>
             <p>
-              Our work combines practical business thinking with modern digital
-              tools, helping organisations improve how they manage customers,
-              bookings, operations, communication, reporting, and growth.
+              Our mission is to help organisations improve how they manage
+              customers, bookings, operations, communication, reporting and
+              growth — with software that is practical, secure and ready for
+              everyday use.
+            </p>
+            <p>
+              Our approach is consultative and delivery-led: understand the
+              problem, plan the system, build carefully, test thoroughly, then
+              support the platform as the organisation grows.
             </p>
           </div>
 
@@ -114,277 +203,340 @@
             <li>Business-focused systems</li>
             <li>Mobile and web platforms</li>
             <li>Client project delivery</li>
-            <li>Future product development</li>
+            <li>Product development</li>
           </ul>
         </div>
       </section>
 
-      <section class="section products" id="products">
-        <div class="container">
-          <div class="section-intro reveal">
-            <p class="section-label">Products</p>
-            <h2>OkangGroup Products</h2>
-            <p>
-              These are products and platforms built and owned under the
-              OkangGroup brand.
-            </p>
-          </div>
-
-          <div class="card-grid">
-            <article class="card reveal">
-              <div class="card-meta">
-                <span class="badge badge-live">Live</span>
-              </div>
-              <h3>StarLiz Academy</h3>
-              <p>
-                Learning and creative education platform designed to support
-                interactive learning, music education, and digital teaching
-                experiences.
-              </p>
-              <a
-                class="card-link"
-                href="https://starlizacademy.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                >starlizacademy.com</a
-              >
-            </article>
-
-            <article class="card reveal" style="--delay: 0.06s">
-              <div class="card-meta">
-                <span class="badge badge-live">Live</span>
-              </div>
-              <h3>OpsWatch</h3>
-              <p>
-                Monitoring and operations platform for apps, websites, systems,
-                services, and business processes.
-              </p>
-              <a
-                class="card-link"
-                href="https://opswatch.okanggroup.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                >opswatch.okanggroup.com</a
-              >
-            </article>
-
-            <article class="card reveal" style="--delay: 0.12s">
-              <div class="card-meta">
-                <span class="badge badge-live">Live</span>
-              </div>
-              <h3>TrueNumeris</h3>
-              <p>
-                Digital product built under OkangGroup for accounting and
-                business finance workflows.
-              </p>
-              <a
-                class="card-link"
-                href="https://truenumeris.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                >truenumeris.com</a
-              >
-            </article>
-
-            <article class="card reveal" style="--delay: 0.18s">
-              <div class="card-meta">
-                <span class="badge badge-planned">Planned</span>
-              </div>
-              <h3>Future Products</h3>
-              <p>
-                More OkangGroup products and services are being planned and
-                developed.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section client-work" id="client-work">
-        <div class="container">
-          <div class="section-intro reveal">
-            <p class="section-label">Client Work</p>
-            <h2>Built by OkangGroup</h2>
-            <p>
-              OkangGroup also designs and builds digital platforms for selected
-              clients. These systems were created by OkangGroup, but they remain
-              owned by the respective clients and organisations.
-            </p>
-          </div>
-
-          <div class="card-grid">
-            <article class="card card-client reveal">
-              <div class="card-meta">
-                <span class="badge badge-client">Client project</span>
-              </div>
-              <h3>Noble Express Courier</h3>
-              <p>
-                Courier and customer service platform created for a client.
-              </p>
-              <p class="ownership">
-                Created by OkangGroup. Owned by the client.
-              </p>
-            </article>
-
-            <article class="card card-client reveal" style="--delay: 0.06s">
-              <div class="card-meta">
-                <span class="badge badge-client">Client project</span>
-              </div>
-              <h3>NiiNai App</h3>
-              <p>
-                Guest house booking, payment, reporting, staff, and management
-                system created for a client.
-              </p>
-              <p class="ownership">
-                Created by OkangGroup. Owned by the client.
-              </p>
-            </article>
-
-            <article class="card card-client reveal" style="--delay: 0.12s">
-              <div class="card-meta">
-                <span class="badge badge-client">Client project</span>
-              </div>
-              <h3>SparkleValeting</h3>
-              <p>
-                Vehicle valeting business website/system created for a client.
-              </p>
-              <p class="ownership">
-                Created by OkangGroup. Owned by the client.
-              </p>
-            </article>
-
-            <article class="card card-client reveal" style="--delay: 0.18s">
-              <div class="card-meta">
-                <span class="badge badge-client">Client project</span>
-              </div>
-              <h3>Treasure House Bible Church International</h3>
-              <p>
-                Church website, member platform, admin system, and digital
-                ministry platform created for a client organisation.
-              </p>
-              <p class="ownership">
-                Created by OkangGroup. Owned by the client organisation.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section services" id="services">
+      <section class="section services" id="services" data-cms-page="services">
         <div class="container">
           <div class="section-intro reveal">
             <p class="section-label">Services</p>
-            <h2>Services</h2>
-            <p>
-              OkangGroup builds practical digital solutions for businesses,
-              churches, communities, and organisations.
+            <h2 data-cms-field="title">What we can do for you</h2>
+            <p data-cms-field="lede">
+              OkangGroup delivers websites, applications and operational
+              software for businesses, churches, communities and organisations
+              that need reliable digital capability.
             </p>
           </div>
 
           <div class="card-grid services-grid">
             <article class="card service-card reveal">
-              <h3>Website Development</h3>
+              <h3>Website development</h3>
               <p>
-                Modern websites for businesses, organisations, and public-facing
-                services.
+                Professional public websites with clear messaging, responsive
+                layouts and a path to manage content as your organisation grows.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.04s">
-              <h3>Mobile App Development</h3>
+              <h3>Mobile applications</h3>
               <p>
-                Android and iOS app development for customer, staff, and
-                business use.
+                Android and iOS apps for customers, staff and field operations —
+                connected to the same business data as your web systems.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.08s">
-              <h3>Business Systems</h3>
+              <h3>Business software</h3>
               <p>
-                Custom systems for bookings, operations, records, finance,
-                reporting, and management.
+                Custom systems for bookings, records, finance workflows,
+                reporting, permissions and day-to-day management.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.12s">
-              <h3>Customer Portals</h3>
+              <h3>Automation &amp; digital solutions</h3>
               <p>
-                Secure customer-facing portals for service requests, updates,
-                records, and communication.
+                Workflow automation, integrations and digital tools that reduce
+                manual work and keep information consistent across teams.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.16s">
-              <h3>Booking and Management Platforms</h3>
+              <h3>Customer portals</h3>
               <p>
-                Systems for hospitality, transport, services, education, and
-                appointment-based businesses.
+                Secure client-facing access for documents, updates, service
+                requests and project visibility.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.2s">
-              <h3>Church and Community Platforms</h3>
+              <h3>Church &amp; community platforms</h3>
               <p>
-                Digital platforms for churches, ministries, members, events,
-                giving, announcements, and admin work.
+                Member platforms, events, giving, announcements and admin tools
+                for churches and community organisations.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.24s">
-              <h3>Monitoring and Operations Tools</h3>
+              <h3>Monitoring &amp; operations</h3>
               <p>
-                Tools for tracking systems, app health, business activities,
-                alerts, and operational performance.
+                Tools for tracking system health, alerts and operational
+                performance across apps and services.
               </p>
             </article>
             <article class="card service-card reveal" style="--delay: 0.28s">
-              <h3>Digital Product Development</h3>
+              <h3>Product development</h3>
               <p>
-                Planning, designing, building, and improving new software
-                products from idea to launch.
+                Planning, designing and shipping new software products from
+                concept through launch and iteration.
               </p>
+            </article>
+          </div>
+          <div class="section-cta reveal">
+            <a class="btn btn-primary" href="#contact">Request a consultation</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section products" id="products" data-cms-page="products">
+        <div class="container">
+          <div class="section-intro reveal">
+            <p class="section-label">Products</p>
+            <h2 data-cms-field="title">OkangGroup products</h2>
+            <p data-cms-field="lede">
+              These platforms are built and owned under the OkangGroup brand.
+              They are separate from client-owned project work.
+            </p>
+          </div>
+
+          <div class="card-grid">
+            <article class="card card-product reveal">
+              <div class="card-visual card-visual-product" aria-hidden="true">
+                <span class="card-visual-mark">SL</span>
+                <span class="card-visual-label">Education platform</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-live">Live</span>
+                  <span class="badge badge-owned">OkangGroup product</span>
+                </div>
+                <h3>StarLiz Academy</h3>
+                <p>
+                  Learning and creative education platform designed to support
+                  interactive learning, music education and digital teaching
+                  experiences.
+                </p>
+                <a
+                  class="card-link"
+                  href="https://starlizacademy.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >starlizacademy.com</a
+                >
+              </div>
+            </article>
+
+            <article class="card card-product reveal" style="--delay: 0.06s">
+              <div class="card-visual card-visual-product" aria-hidden="true">
+                <span class="card-visual-mark">OW</span>
+                <span class="card-visual-label">Operations monitoring</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-live">Live</span>
+                  <span class="badge badge-owned">OkangGroup product</span>
+                </div>
+                <h3>OpsWatch</h3>
+                <p>
+                  Monitoring and operations platform for apps, websites, systems,
+                  services and business processes.
+                </p>
+                <a
+                  class="card-link"
+                  href="https://opswatch.okanggroup.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >opswatch.okanggroup.com</a
+                >
+              </div>
+            </article>
+
+            <article class="card card-product reveal" style="--delay: 0.12s">
+              <div class="card-visual card-visual-product" aria-hidden="true">
+                <span class="card-visual-mark">TN</span>
+                <span class="card-visual-label">Finance workflows</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-live">Live</span>
+                  <span class="badge badge-owned">OkangGroup product</span>
+                </div>
+                <h3>TrueNumeris</h3>
+                <p>
+                  Digital product built under OkangGroup for accounting and
+                  business finance workflows.
+                </p>
+                <a
+                  class="card-link"
+                  href="https://truenumeris.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >truenumeris.com</a
+                >
+              </div>
+            </article>
+
+            <article class="card card-product reveal" style="--delay: 0.18s">
+              <div class="card-visual card-visual-product" aria-hidden="true">
+                <span class="card-visual-mark">+</span>
+                <span class="card-visual-label">Coming next</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-planned">Planned</span>
+                  <span class="badge badge-owned">OkangGroup product</span>
+                </div>
+                <h3>Future products</h3>
+                <p>
+                  Additional OkangGroup products and services are being planned
+                  and developed.
+                </p>
+              </div>
             </article>
           </div>
         </div>
       </section>
 
-      <section class="section how-we-work" id="how-we-work">
+      <section class="section client-work" id="client-work" data-cms-page="work">
+        <div class="container">
+          <div class="section-intro reveal">
+            <p class="section-label">Our Work</p>
+            <h2 data-cms-field="title">Selected client projects</h2>
+            <p data-cms-field="lede">
+              OkangGroup designs and builds digital platforms for selected
+              clients. These systems were created by OkangGroup; ownership
+              remains with the respective clients and organisations. Only
+              high-level, non-confidential descriptions are published here.
+            </p>
+          </div>
+
+          <div class="card-grid">
+            <article class="card card-client reveal">
+              <div class="card-visual" aria-hidden="true">
+                <span class="card-visual-mark">NE</span>
+                <span class="card-visual-label">Courier platform</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-client">Client project</span>
+                </div>
+                <h3>Noble Express Courier</h3>
+                <p>
+                  Courier and customer service platform created for a client.
+                </p>
+                <p class="ownership">
+                  Created by OkangGroup. Owned by the client.
+                </p>
+              </div>
+            </article>
+
+            <article class="card card-client reveal" style="--delay: 0.06s">
+              <div class="card-visual" aria-hidden="true">
+                <span class="card-visual-mark">NN</span>
+                <span class="card-visual-label">Hospitality system</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-client">Client project</span>
+                </div>
+                <h3>NiiNai App</h3>
+                <p>
+                  Guest house booking, payment, reporting, staff and management
+                  system created for a client.
+                </p>
+                <p class="ownership">
+                  Created by OkangGroup. Owned by the client.
+                </p>
+              </div>
+            </article>
+
+            <article class="card card-client reveal" style="--delay: 0.12s">
+              <div class="card-visual" aria-hidden="true">
+                <span class="card-visual-mark">SV</span>
+                <span class="card-visual-label">Service business</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-client">Client project</span>
+                </div>
+                <h3>SparkleValeting</h3>
+                <p>
+                  Vehicle valeting business website and system created for a
+                  client.
+                </p>
+                <p class="ownership">
+                  Created by OkangGroup. Owned by the client.
+                </p>
+              </div>
+            </article>
+
+            <article class="card card-client reveal" style="--delay: 0.18s">
+              <div class="card-visual" aria-hidden="true">
+                <span class="card-visual-mark">TH</span>
+                <span class="card-visual-label">Church platform</span>
+              </div>
+              <div class="card-body">
+                <div class="card-meta">
+                  <span class="badge badge-client">Client project</span>
+                </div>
+                <h3>Treasure House Bible Church International</h3>
+                <p>
+                  Church website, member platform, admin system and digital
+                  ministry platform created for a client organisation.
+                </p>
+                <p class="ownership">
+                  Created by OkangGroup. Owned by the client organisation.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section how-we-work" id="how-we-work" data-cms-page="process">
         <div class="container">
           <div class="section-intro reveal">
             <p class="section-label">Process</p>
-            <h2>How We Work</h2>
+            <h2 data-cms-field="title">How we work</h2>
+            <p data-cms-field="lede">
+              A clear path from first conversation to a live system — and
+              support after launch.
+            </p>
           </div>
 
           <ol class="steps">
             <li class="step reveal">
               <span class="step-number">1</span>
               <div>
-                <h3>Understand the problem</h3>
+                <h3>Consultation</h3>
                 <p>
-                  We look at the real business or organisation need before
-                  building anything.
+                  We listen to the business or organisation need, constraints
+                  and success criteria before recommending an approach.
                 </p>
               </div>
             </li>
             <li class="step reveal" style="--delay: 0.06s">
               <span class="step-number">2</span>
               <div>
-                <h3>Plan the system</h3>
+                <h3>Planning</h3>
                 <p>
-                  We structure the features, users, permissions, workflows, and
-                  long-term direction.
+                  We structure features, users, permissions, workflows and the
+                  long-term direction of the platform.
                 </p>
               </div>
             </li>
             <li class="step reveal" style="--delay: 0.12s">
               <span class="step-number">3</span>
               <div>
-                <h3>Build the platform</h3>
+                <h3>Development</h3>
                 <p>
-                  We develop practical web, mobile, and backend systems.
+                  We build practical web, mobile and backend systems with
+                  secure access and clear ownership of data.
                 </p>
               </div>
             </li>
             <li class="step reveal" style="--delay: 0.18s">
               <span class="step-number">4</span>
               <div>
-                <h3>Test and improve</h3>
+                <h3>Testing</h3>
                 <p>
-                  We check the system properly before release and improve it
+                  We verify the system thoroughly before release and refine it
                   based on real use.
                 </p>
               </div>
@@ -392,36 +544,136 @@
             <li class="step reveal" style="--delay: 0.24s">
               <span class="step-number">5</span>
               <div>
-                <h3>Support growth</h3>
-                <p>We build with future expansion in mind.</p>
+                <h3>Ongoing support</h3>
+                <p>
+                  We support live systems and plan improvements as your
+                  organisation grows.
+                </p>
               </div>
             </li>
           </ol>
         </div>
       </section>
 
-      <section class="section contact" id="contact">
-        <div class="container contact-panel reveal">
-          <p class="section-label">Contact</p>
-          <h2>Contact OkangGroup</h2>
-          <p>
-            For business enquiries, partnerships, or software project
-            discussions, contact OkangGroup.
-          </p>
-          <p class="contact-phone">
-            Phone / WhatsApp:
-            <a href="tel:+447404865949">07404 865949</a>
-          </p>
-          <div class="contact-actions">
-            <a class="btn btn-primary" href="tel:+447404865949">Call OkangGroup</a>
-            <a
-              class="btn btn-secondary"
-              href="https://wa.me/447404865949"
-              target="_blank"
-              rel="noopener noreferrer"
-              >WhatsApp OkangGroup</a
-            >
+      <section class="section contact" id="contact" data-cms-page="contact">
+        <div class="container contact-layout">
+          <div class="contact-panel reveal">
+            <p class="section-label">Contact</p>
+            <h2 data-cms-field="title">Start a conversation</h2>
+            <p data-cms-field="lede">
+              Tell us about your organisation and what you need. Your enquiry
+              is recorded in OkangGroup Operations so our team can follow up
+              through quotation, contract and delivery when appropriate.
+            </p>
+            <p class="contact-phone">
+              Phone / WhatsApp:
+              <a href="tel:+447404865949">07404 865949</a>
+            </p>
+            <div class="contact-actions">
+              <a class="btn btn-secondary" href="tel:+447404865949">Call OkangGroup</a>
+              <a
+                class="btn btn-ghost"
+                href="https://wa.me/447404865949"
+                target="_blank"
+                rel="noopener noreferrer"
+                >WhatsApp</a
+              >
+            </div>
           </div>
+
+          <form class="enquiry-form reveal" id="enquiry-form" novalidate style="--delay: 0.08s">
+            <h3 class="enquiry-form-title">Project enquiry</h3>
+            <p class="enquiry-form-hint">
+              Fields marked with * are required. We use this to open an
+              Operations enquiry record.
+            </p>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Organisation *</span>
+                <input
+                  name="organisation_name"
+                  type="text"
+                  autocomplete="organization"
+                  maxlength="200"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Your name *</span>
+                <input
+                  name="contact_name"
+                  type="text"
+                  autocomplete="name"
+                  maxlength="120"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Email *</span>
+                <input
+                  name="contact_email"
+                  type="email"
+                  autocomplete="email"
+                  maxlength="254"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Phone</span>
+                <input
+                  name="contact_phone"
+                  type="tel"
+                  autocomplete="tel"
+                  maxlength="40"
+                />
+              </label>
+              <label class="field field-full">
+                <span>How can we help? *</span>
+                <select name="enquiry_type" required>
+                  <option value="new_website">Website development</option>
+                  <option value="mobile_app">Mobile application</option>
+                  <option value="business_software">Business software</option>
+                  <option value="automation">Automation</option>
+                  <option value="digital_solutions">Digital solutions</option>
+                  <option value="cms_management">CMS / content management</option>
+                  <option value="support">Support</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label class="field field-full">
+                <span>Project summary *</span>
+                <textarea
+                  name="summary"
+                  rows="5"
+                  maxlength="4000"
+                  required
+                  placeholder="Describe the problem, users and what success looks like."
+                ></textarea>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit" id="enquiry-submit">
+                Send enquiry
+              </button>
+              <p class="form-status" id="enquiry-status" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="section portal-cta" id="client-portal" aria-labelledby="portal-heading">
+        <div class="container portal-panel reveal">
+          <div>
+            <p class="section-label">Existing clients</p>
+            <h2 id="portal-heading">Client Portal</h2>
+            <p>
+              Secure access for existing OkangGroup clients to view projects,
+              documents and related account information.
+            </p>
+          </div>
+          <a class="btn btn-primary" href="/admin/login">Sign in to Client Portal</a>
         </div>
       </section>
     </main>
@@ -437,15 +689,17 @@
             height="64"
           />
           <p class="footer-tagline">Innovate. Build. Succeed.</p>
-          <p>Digital products, websites, apps, and business systems.</p>
+          <p>Digital products, websites, apps and business systems.</p>
         </div>
 
         <nav class="footer-nav" aria-label="Footer">
           <a href="#about">About</a>
-          <a href="#products">Products</a>
-          <a href="#client-work">Client Work</a>
           <a href="#services">Services</a>
+          <a href="#products">Products</a>
+          <a href="#client-work">Our Work</a>
+          <a href="#how-we-work">How We Work</a>
           <a href="#contact">Contact</a>
+          <a href="/admin/login">Client Portal</a>
         </nav>
 
         <p class="copyright">

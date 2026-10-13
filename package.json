@@ -7,7 +7,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:production": "npm run build && npm run admin:build && node scripts/assemble-production-dist.mjs",
+    "preview": "vite preview",
+    "test:website-enquiry": "node js/websiteEnquiry.test.mjs",
+    "cms:export": "node scripts/cms-publish-export.mjs",
+    "cms:dev-client": "npm --prefix dev-client-cms start",
+    "cms:integration-e2e": "node scripts/cms-real-integration-e2e.mjs",
+    "cms:hosted-uat": "node scripts/cms-hosted-integration-uat.mjs",
+    "th-staging:test": "npm --prefix staging/treasure-house test",
+    "th-staging:start": "npm --prefix staging/treasure-house start",
+    "th-staging:validate-env": "npm --prefix staging/treasure-house run validate-env",
+    "supabase:assert": "node scripts/assert-supabase-project.mjs prbgsnxpwyepdggdysnt",
+    "owner:set-password": "node scripts/set-owner-password.mjs",
+    "admin:build": "npm --prefix admin run build",
+    "admin:dev": "npm --prefix admin run dev"
   },
   "devDependencies": {
     "vite": "^6.2.0"

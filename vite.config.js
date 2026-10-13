@@ -6,9 +6,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    assetsInlineLimit: 0,
   },
   server: {
     port: 5173,
     open: true,
+  },
+  // JSON import for Company CMS publish bundle (content/cms/current.json).
+  json: {
+    namedExports: false,
+    stringify: false,
   },
 });

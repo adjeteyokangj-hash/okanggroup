@@ -1,0 +1,13 @@
+{
+  "name": "okanggroup-th-staging-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Isolated Treasure House staging CMS bridge for OkangGroup. NOT production. Refuses live TH Supabase hosts.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node tests/integration.test.mjs",
+    "validate-env": "node scripts/validate-env.mjs"
+  }
+}

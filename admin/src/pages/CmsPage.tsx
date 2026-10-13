@@ -1,5 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/auth';
 
 type Page = {
   id: string;
@@ -7,155 +9,198 @@ type Page = {
   title: string;
   status: string;
   published_at: string | null;
+  updated_at: string;
+};
+
+type PublishEvent = {
+  id: string;
+  page_id: string | null;
+  status: string;
+  artefact_path: string | null;
+  created_at: string;
+  created_by: string | null;
+  profiles?: { full_name: string; email: string } | null;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Draft',
+  in_review: 'In review',
+  published: 'Published',
+  archived: 'Archived',
+  scheduled: 'Scheduled',
 };
 
 export function CmsPage() {
+  const { can } = useAuth();
+  const canEdit = can('company_cms.edit');
+  const navigate = useNavigate();
   const [rows, setRows] = useState<Page[]>([]);
-  const [slug, setSlug] = useState('');
-  const [title, setTitle] = useState('');
+  const [events, setEvents] = useState<PublishEvent[]>([]);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function load() {
-    const { data, error: err } = await supabase
-      .from('cms_pages')
-      .select('id, slug, title, status, published_at')
-      .order('title');
-    if (err) setError(err.message);
-    else setRows((data as Page[]) ?? []);
-  }
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      const [{ data, error: err }, { data: ev }] = await Promise.all([
+        supabase
+          .from('cms_pages')
+          .select('id, slug, title, status, published_at, updated_at')
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('cms_publish_events')
+          .select('id, page_id, status, artefact_path, created_at, created_by, profiles:created_by(full_name, email)')
+          .order('created_at', { ascending: false })
+          .limit(12),
+      ]);
+      if (err) setError(err.message);
+      else setRows((data as Page[]) ?? []);
+      setLoaded(true);
+      setEvents(
+        ((ev as Array<Omit<PublishEvent, 'profiles'> & { profiles: PublishEvent['profiles'] | PublishEvent['profiles'][] }>) ?? []).map(
+          (row) => ({
+            ...row,
+            profiles: Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles,
+          }),
+        ),
+      );
+    })();
   }, []);
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const { error: err } = await supabase.from('cms_pages').insert({
-      slug: slug.trim(),
-      title: title.trim(),
-      page_type: 'custom',
-      status: 'draft',
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (status !== 'all' && r.status !== status) return false;
+      if (!needle) return true;
+      return [r.title, r.slug, r.status].some((v) => v.toLowerCase().includes(needle));
     });
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setSlug('');
-    setTitle('');
-    await load();
-  }
-
-  async function submitForReview(id: string) {
-    setError(null);
-    const { error: err } = await supabase.from('cms_pages').update({ status: 'in_review' }).eq('id', id);
-    if (err) setError(err.message);
-    else await load();
-  }
-
-  async function approveAndRecordPublish(id: string) {
-    setError(null);
-    setMessage(null);
-    const { data: user } = await supabase.auth.getUser();
-    const { data: page, error: readErr } = await supabase
-      .from('cms_pages')
-      .select('id, slug, title, status')
-      .eq('id', id)
-      .single();
-    if (readErr || !page) {
-      setError(readErr?.message ?? 'Page not found');
-      return;
-    }
-
-    const snapshot = { page, recorded_at: new Date().toISOString() };
-    const { count } = await supabase
-      .from('cms_revisions')
-      .select('id', { count: 'exact', head: true })
-      .eq('entity_type', 'cms_page')
-      .eq('entity_id', id);
-
-    await supabase.from('cms_revisions').insert({
-      entity_type: 'cms_page',
-      entity_id: id,
-      snapshot_json: snapshot,
-      revision_no: (count ?? 0) + 1,
-      created_by: user.user?.id,
-    });
-
-    const { error: pubErr } = await supabase
-      .from('cms_pages')
-      .update({
-        status: 'published',
-        published_at: new Date().toISOString(),
-        published_by: user.user?.id,
-      })
-      .eq('id', id);
-
-    if (pubErr) {
-      setError(pubErr.message);
-      return;
-    }
-
-    await supabase.from('cms_publish_events').insert({
-      page_id: id,
-      publish_kind: 'site_bundle',
-      artefact_path: `pending/${page.slug}.json`,
-      previous_artefact_path: null,
-      status: 'pending',
-      created_by: user.user?.id,
-    });
-
-    setMessage(
-      'Page approved and publish event recorded. Public website deploy remains Owner-controlled and is not executed automatically.',
-    );
-    await load();
-  }
+  }, [rows, q, status]);
 
   return (
     <section>
       <header className="page-head">
-        <h1>Company CMS</h1>
-        <p>Draft → review → approve. Public Vite deploy requires separate Owner approval.</p>
+        <div>
+          <h1>Company CMS</h1>
+          <p>
+            Draft → review → approve → local export only. Public website deploy needs separate Owner
+            approval.
+          </p>
+        </div>
+        <div className="page-head-actions">
+          <Link to="/cms-systems">
+            <button type="button" className="secondary">
+              CMS Systems
+            </button>
+          </Link>
+          {canEdit ? (
+            <Link to="/cms/new">
+              <button type="button">+ Create content</button>
+            </Link>
+          ) : null}
+        </div>
       </header>
-      <form className="inline-form" onSubmit={onCreate}>
-        <input placeholder="slug" value={slug} onChange={(e) => setSlug(e.target.value)} required />
-        <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-        <button type="submit">New draft</button>
-      </form>
+
+      {rows.length > 0 ? (
+      <div className="toolbar">
+        <input
+          placeholder="Search title or slug…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="in_review">In review</option>
+          <option value="published">Published</option>
+          <option value="archived">Archived</option>
+        </select>
+        <span className="muted-sm">
+          {filtered.length} of {rows.length} page{rows.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      ) : null}
       {error ? <div className="error">{error}</div> : null}
-      {message ? <div className="ok">{message}</div> : null}
+
+      {loaded && rows.length === 0 && !error ? (
+        <div className="panel empty-state">
+          <h2>No company content yet — create a page to begin</h2>
+          <p className="muted-sm">
+            Company pages go through draft → review → approval before any export. Nothing is published
+            automatically.
+          </p>
+          {canEdit ? (
+            <Link to="/cms/new">
+              <button type="button">+ Create content</button>
+            </Link>
+          ) : (
+            <p className="muted-sm">Ask an Owner or editor with company_cms.edit access to add content.</p>
+          )}
+        </div>
+      ) : (
       <table>
         <thead>
           <tr>
             <th>Title</th>
             <th>Slug</th>
             <th>Status</th>
-            <th>Actions</th>
+            <th>Updated</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
+          {filtered.map((r) => (
+            <tr key={r.id} onClick={() => navigate(`/cms/${r.id}`)}>
               <td>{r.title}</td>
               <td>{r.slug}</td>
-              <td>{r.status}</td>
-              <td className="actions">
-                {r.status === 'draft' ? (
-                  <button type="button" onClick={() => void submitForReview(r.id)}>
-                    Submit
-                  </button>
-                ) : null}
-                {r.status === 'in_review' ? (
-                  <button type="button" onClick={() => void approveAndRecordPublish(r.id)}>
-                    Approve
-                  </button>
-                ) : null}
+              <td>
+                <span className={`status-pill ${r.status}`}>
+                  {STATUS_LABEL[r.status] ?? r.status}
+                </span>
               </td>
+              <td>{new Date(r.updated_at).toLocaleString()}</td>
             </tr>
           ))}
+          {filtered.length === 0 ? (
+            <tr>
+              <td colSpan={4}>No content matches.</td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
+      )}
+
+      <div className="panel">
+        <h2>Publish history</h2>
+        <p className="muted-sm">
+          Shows queued/exported approvals. Does not deploy the public site. Rollback uses{' '}
+          <code>content/cms/previous.json</code> after local export.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Approved by</th>
+              <th>Status</th>
+              <th>Artefact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((e) => (
+              <tr key={e.id}>
+                <td>{new Date(e.created_at).toLocaleString()}</td>
+                <td>{e.profiles?.full_name ?? e.profiles?.email ?? '—'}</td>
+                <td>{e.status}</td>
+                <td>{e.artefact_path || '—'}</td>
+              </tr>
+            ))}
+            {events.length === 0 ? (
+              <tr>
+                <td colSpan={4}>No publish events yet.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

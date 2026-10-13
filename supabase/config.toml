@@ -1,8 +1,11 @@
 # Supabase local/CLI config — remote target: prbgsnxpwyepdggdysnt (okanggroup-platform)
 # Migrations are applied only to that project under Release 1 build authorisation.
+# CLI must be authenticated as okanggroup@gmail.com before `supabase link`.
+# Current local npm Supabase login may be a different account — use workspace MCP for remote DDL.
 
-[project]
-id = "prbgsnxpwyepdggdysnt"
+project_id = "prbgsnxpwyepdggdysnt"
+
+# [project] table removed — unsupported by CLI v2.107 (use project_id above)
 
 [api]
 enabled = true
