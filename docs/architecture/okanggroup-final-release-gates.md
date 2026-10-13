@@ -21,7 +21,7 @@ Companion: [`okanggroup-unified-production-release-readiness.md`](./okanggroup-u
 | Gate 1 — Owner acceptance | ⏳ OPEN |
 | Gate 2 — Security | ⚠️ OPEN — awaiting Owner **B** or **C** |
 | Gate 3 — External services | ✅ CLOSED (email OFF; CMS staging/dev; live publish OFF) |
-| Gate 4 — Production deployment | 🔒 HOLD |
+| Gate 4 — Production deployment | ✅ EXECUTED 2026-10-13 — see [`okanggroup-unified-production-deployment-report.md`](./okanggroup-unified-production-deployment-report.md); Gate 2 remains OPEN |
 
 ---
 
