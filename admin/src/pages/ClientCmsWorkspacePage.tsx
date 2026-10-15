@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CmsCustomModulePanel } from '../components/CmsCustomModulePanel';
 import { CmsMediaLibrary } from '../components/CmsMediaLibrary';
 import { OpsWatchVisualStudio } from '../visual-studio/OpsWatchVisualStudio';
@@ -13,6 +13,7 @@ import {
   labelCmsConnectionStatus,
 } from '../lib/cmsConnectionStatus';
 import { CmsBuilderDoc, normalizeBuilderDoc } from '../lib/cmsBuilder';
+import { isOpsWatchMarketingCms } from '../lib/okanggroupProducts';
 import { TH_SHADOW_SLUG } from '../lib/treasureHouseCmsShadow';
 import { supabase } from '../lib/supabase';
 
@@ -137,8 +138,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ClientCmsWorkspacePage() {
   const { instanceId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, can, profile } = useAuth();
   const isClientUser = profile?.account_kind === 'client_user';
+  const workspaceView = searchParams.get('view') === 'media' ? 'media' : 'studio';
   const [instance, setInstance] = useState<Instance | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -644,15 +647,17 @@ export function ClientCmsWorkspacePage() {
     );
   }
 
-  const isOpsWatchMarketing =
-    connection?.adapter_code === 'opswatch_marketing' ||
-    instance.product_code === 'opswatch' ||
-    instance.slug === 'opswatch' ||
-    /^opswatch/i.test(instance.display_name);
+  const isOpsWatchMarketing = isOpsWatchMarketingCms({
+    adapterCode: connection?.adapter_code,
+    productCode: instance.product_code,
+    slug: instance.slug,
+    displayName: instance.display_name,
+  });
 
   if (isOpsWatchMarketing) {
+    const connStatus = deriveCmsConnectionStatus(connection);
     return (
-      <section className="cms-workspace">
+      <section className="cms-workspace cms-workspace-opswatch">
         <header className="page-head">
           <div>
             <h1>{instance.display_name}</h1>
@@ -660,19 +665,63 @@ export function ClientCmsWorkspacePage() {
               {instance.ownership_kind === 'okanggroup_product'
                 ? 'OkangGroup Product'
                 : (client?.legal_name ?? 'OkangGroup')}{' '}
-              · Managed Website · OpsWatch marketing · <Link to="/my-cms">Back</Link>
-              {' · '}
-              <Link to="/cms-systems">Managed Websites</Link>
+              · Managed Website · OpsWatch marketing website only
             </p>
+          </div>
+          <div className="page-head-actions">
+            <Link to="/my-cms" className="button-link secondary">
+              Back to My Client CMS
+            </Link>
+            <Link to="/cms-systems" className="button-link secondary">
+              Managed Websites
+            </Link>
           </div>
         </header>
         {error ? <div className="error">{error}</div> : null}
         {message ? <div className="ok">{message}</div> : null}
+        {connection ? (
+          <div className="cms-conn-banner">
+            <div>
+              <span
+                className={`cms-conn-dot ${cmsConnectionStatusTone(connStatus) === 'ok' ? 'ok' : 'warn'}`}
+              />
+              <strong>{connection.adapter_code}</strong>
+              <span className="muted-sm">· {labelCmsConnectionStatus(connStatus)}</span>
+              {connection.last_error ? (
+                <span className="cms-conn-err">· {explainCmsConnectionError(connection.last_error)}</span>
+              ) : null}
+            </div>
+            <p className="muted-sm">
+              Edits apply only to the OpsWatch public marketing website. Customer dashboards,
+              monitoring, billing and OpsWatch administration stay out of this CMS.
+            </p>
+          </div>
+        ) : null}
+        <nav className="cms-tab-bar" aria-label="OpsWatch website workspace">
+          <button
+            type="button"
+            className={workspaceView === 'studio' ? 'active' : ''}
+            onClick={() => setSearchParams({})}
+          >
+            <span>Edit Website</span>
+            <em>Visual Studio</em>
+          </button>
+          <button
+            type="button"
+            className={workspaceView === 'media' ? 'active' : ''}
+            onClick={() => setSearchParams({ view: 'media' })}
+          >
+            <span>Media</span>
+            <em>Library</em>
+          </button>
+        </nav>
         {connection?.adapter_code !== 'opswatch_marketing' ? (
           <div className="error">
             Attach the OpsWatch marketing adapter from Managed Websites before editing. Expected
             adapter code: opswatch_marketing.
           </div>
+        ) : workspaceView === 'media' ? (
+          <CmsMediaLibrary clientId={instance.client_id} instanceId={instance.id} canUpload={canUpload} />
         ) : (
           <OpsWatchVisualStudio
             instanceId={instance.id}

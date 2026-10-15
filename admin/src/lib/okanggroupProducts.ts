@@ -30,3 +30,16 @@ export function productByCode(code: string | null | undefined): OkangGroupProduc
   if (!code) return undefined;
   return OKANGGROUP_PRODUCTS.find((p) => p.code === code);
 }
+
+/** True when My Client CMS / workspace must open the OpsWatch marketing Visual Studio. */
+export function isOpsWatchMarketingCms(input: {
+  adapterCode?: string | null;
+  productCode?: string | null;
+  slug?: string | null;
+  displayName?: string | null;
+}): boolean {
+  if (input.adapterCode === 'opswatch_marketing') return true;
+  if (input.productCode === 'opswatch') return true;
+  if ((input.slug ?? '').toLowerCase() === 'opswatch') return true;
+  return Boolean(input.displayName && /^opswatch(\b|$|[\s_-])/i.test(input.displayName));
+}
