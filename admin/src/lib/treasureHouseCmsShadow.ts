@@ -135,6 +135,24 @@ export const TH_SHADOW_EXCLUDED = [
   'private_vault',
 ] as const;
 
+/** Administration-only sections — stay in CMS Management, not Visual Studio Layers. */
+export const TH_ADMIN_NAV_KEYS = new Set([
+  'dashboard',
+  'media',
+  'history',
+  'settings',
+  'mobile_designer',
+]);
+
+/** Website content modules that Visual Studio can open for shadow page editing. */
+export function thVisualNavItems(): ThShadowNavItem[] {
+  return TH_SHADOW_NAV.filter((n) => n.kind === 'module' && n.moduleCode && !TH_ADMIN_NAV_KEYS.has(n.key));
+}
+
+export function isThVisualModule(key: string): boolean {
+  return thVisualNavItems().some((n) => n.key === key);
+}
+
 /**
  * Field mapping: OkangGroup shadow → Treasure House application schema.
  * Verified 2026-10-12 against treasure-house-app lib/website-cms + migrations /

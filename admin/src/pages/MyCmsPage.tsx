@@ -84,7 +84,7 @@ export function MyCmsPage() {
         <div className="page-head-actions">
           <Link to="/cms-systems">
             <button type="button" className="secondary">
-              CMS Systems
+              Managed Websites
             </button>
           </Link>
         </div>

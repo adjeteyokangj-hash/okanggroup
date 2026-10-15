@@ -48,6 +48,8 @@ export type BuilderNodeStyle = {
   lineHeight?: string;
   textAlign?: 'left' | 'center' | 'right';
   opacity?: number;
+  objectFit?: 'cover' | 'contain' | 'fill' | 'none';
+  objectPosition?: string;
 };
 
 export type BuilderNodeProps = {

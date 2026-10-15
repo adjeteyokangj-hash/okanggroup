@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../lib/auth';
+import type { NativeEditorBridge } from '../../visual-studio/tools/NativeStudioTools';
 import {
   cmsEditorLayoutKey,
   clampRailWidth,
@@ -50,6 +52,10 @@ type Props = {
   onBodyChange: (body: CmsBuilderDoc) => void;
   onSaveDraft: () => void;
   workflowActions?: React.ReactNode;
+  /** When true, Visual Studio shell owns floating tools; hide dual rails. */
+  studioEmbed?: boolean;
+  studioSurface?: 'edit' | 'preview';
+  onBridgeChange?: (bridge: NativeEditorBridge | null) => void;
 };
 
 const VIEWPORT_WIDTH: Record<Viewport, number | string> = {
@@ -85,6 +91,9 @@ export function ProVisualBuilder({
   onBodyChange,
   onSaveDraft,
   workflowActions,
+  studioEmbed = false,
+  studioSurface = 'edit',
+  onBridgeChange,
 }: Props) {
   const { user } = useAuth();
   const layoutKey = cmsEditorLayoutKey(user?.id, instanceId);
@@ -108,12 +117,13 @@ export function ProVisualBuilder({
   const [rightTab, setRightTab] = useState<RightTab>('content');
   const [compFilter, setCompFilter] = useState<BuilderLibraryItem['category'] | 'all'>('all');
   const [previewOnly, setPreviewOnly] = useState(false);
+  const [propertiesPortal, setPropertiesPortal] = useState<HTMLElement | null>(null);
   const panelSnapshot = useRef<{ left: boolean; right: boolean } | null>(null);
   const resizing = useRef<'left' | 'right' | null>(null);
 
   const selected = selectedId ? findNode(doc.tree, selectedId) : null;
-  const showLeft = leftOpen && !previewOnly;
-  const showRight = rightOpen && !previewOnly;
+  const showLeft = leftOpen && !previewOnly && !studioEmbed;
+  const showRight = rightOpen && !previewOnly && !studioEmbed;
   const frameWidth = viewport === 'mobile' ? mobileWidth : VIEWPORT_WIDTH[viewport];
 
   const library = useMemo(
@@ -154,6 +164,25 @@ export function ProVisualBuilder({
       return rest;
     });
   }
+
+  useEffect(() => {
+    if (!studioEmbed) return;
+    setPreviewOnly(studioSurface === 'preview');
+  }, [studioEmbed, studioSurface]);
+
+  useEffect(() => {
+    if (!studioEmbed) {
+      setPropertiesPortal(null);
+      return;
+    }
+    const sync = () => {
+      const el = document.getElementById('vs-properties-root');
+      setPropertiesPortal((prev) => (prev === el ? prev : el));
+    };
+    sync();
+    const timer = window.setInterval(sync, 300);
+    return () => window.clearInterval(timer);
+  }, [studioEmbed]);
 
   useEffect(() => {
     const next = normalizeBuilderDoc(bodyJson, siteName);
@@ -212,12 +241,27 @@ export function ProVisualBuilder({
           }
         }),
       );
-      if (!cancelled) setUrlMap(next);
+      if (!cancelled) setUrlMap((prev) => ({ ...prev, ...next }));
     })();
     return () => {
       cancelled = true;
     };
   }, [doc]);
+
+  // Ensure Image Studio always has a signed preview for the selected node.
+  useEffect(() => {
+    const path = selected?.props?.imagePath;
+    if (!path) return;
+    let cancelled = false;
+    void signedCmsMediaUrl(path)
+      .then((url) => {
+        if (!cancelled) setUrlMap((m) => (m[path] === url ? m : { ...m, [path]: url }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.props?.imagePath]);
 
   useEffect(() => {
     if (!canEdit || !dirty) return;
@@ -352,6 +396,41 @@ export function ProVisualBuilder({
       setUploading(false);
     }
   }
+
+  useEffect(() => {
+    if (!onBridgeChange) return;
+    const previewPath = selected?.props?.imagePath;
+    onBridgeChange({
+      doc,
+      selected,
+      canEdit,
+      dirty,
+      canUndo: history.length > 0,
+      canRedo: future.length > 0,
+      uploading,
+      imagePreviewUrl: previewPath ? urlMap[previewPath] ?? null : null,
+      viewport,
+      setViewport,
+      applyDoc: (next) => commit(next, true),
+      onUndo: undo,
+      onRedo: redo,
+      onSave: onSaveDraft,
+      setSelectedId,
+      onImageFile,
+    });
+  }, [
+    onBridgeChange,
+    doc,
+    selected,
+    canEdit,
+    dirty,
+    history.length,
+    future.length,
+    uploading,
+    urlMap,
+    viewport,
+    onSaveDraft,
+  ]);
 
   async function onBrandAsset(kind: 'logo' | 'appIcon', file: File | null) {
     if (!file || !user || !canEdit) return;
@@ -778,6 +857,23 @@ export function ProVisualBuilder({
             </aside>
           </>
         ) : null}
+
+        {studioEmbed && propertiesPortal
+          ? createPortal(
+              <BuilderStyleInspector
+                doc={doc}
+                selected={selected}
+                canEdit={canEdit}
+                tab={rightTab}
+                onTab={setRightTab}
+                onChange={commit}
+                onRemove={remove}
+                uploading={uploading}
+                onImageFile={(f) => void onImageFile(f)}
+              />,
+              propertiesPortal,
+            )
+          : null}
       </div>
     </div>
   );

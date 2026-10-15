@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { uploadClientCmsImage } from '../lib/files';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
+import type { TreasureHouseEditorBridge } from '../visual-studio/tools/TreasureHouseStudioTools';
 
 type FieldDef = {
   key: string;
@@ -38,6 +39,8 @@ type Props = {
   /** When set, only this module_code is shown (Treasure House shadow sections). */
   focusModuleCode?: string | null;
   hideHeader?: boolean;
+  /** Visual Studio bridge for floating Text / Image studios. */
+  onBridgeChange?: (bridge: TreasureHouseEditorBridge | null) => void;
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -56,6 +59,7 @@ export function CmsCustomModulePanel({
   canPublish,
   focusModuleCode = null,
   hideHeader = false,
+  onBridgeChange,
 }: Props) {
   const { user } = useAuth();
   const [defs, setDefs] = useState<ModuleDef[]>([]);
@@ -124,8 +128,7 @@ export function CmsCustomModulePanel({
     setMessage(null);
   }
 
-  async function save(e: FormEvent) {
-    e.preventDefault();
+  async function saveDraftRecord(opts?: { keepOpen?: boolean }) {
     if (!canEdit || !user || !def || !title.trim()) return;
     setError(null);
     setMessage(null);
@@ -148,28 +151,94 @@ export function CmsCustomModulePanel({
       if (err) setError(err.message);
       else {
         setMessage('Record saved as draft.');
-        resetForm();
+        if (!opts?.keepOpen) resetForm();
         await loadRecords(def.id);
       }
     } else {
-      const { error: err } = await supabase.from('cms_custom_records').insert({
-        cms_instance_id: instanceId,
-        client_id: clientId,
-        module_def_id: def.id,
-        title: title.trim(),
-        data_json: data,
-        status: 'draft',
-        created_by: user.id,
-        updated_by: user.id,
-      });
+      const { data: inserted, error: err } = await supabase
+        .from('cms_custom_records')
+        .insert({
+          cms_instance_id: instanceId,
+          client_id: clientId,
+          module_def_id: def.id,
+          title: title.trim(),
+          data_json: data,
+          status: 'draft',
+          created_by: user.id,
+          updated_by: user.id,
+        })
+        .select('id')
+        .single();
       if (err) setError(err.message);
       else {
         setMessage('Record created.');
-        resetForm();
+        if (opts?.keepOpen && inserted?.id) setEditId(inserted.id as string);
+        else resetForm();
         await loadRecords(def.id);
       }
     }
   }
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    await saveDraftRecord();
+  }
+
+  async function uploadFieldImage(key: string, file: File) {
+    if (!canEdit || !user) return;
+    setUploadingKey(key);
+    setError(null);
+    try {
+      const row = await uploadClientCmsImage({
+        clientId,
+        instanceId,
+        file,
+        userId: user.id,
+        altText: def?.fields_json.find((f) => f.key === key)?.label,
+      });
+      setData((prev) => ({ ...prev, [key]: row.storage_path }));
+      setMessage('Image uploaded to media library.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingKey(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!onBridgeChange) return;
+    if (!def) {
+      onBridgeChange(null);
+      return;
+    }
+    onBridgeChange({
+      moduleCode: def.module_code,
+      moduleName: def.module_name,
+      recordId: editId,
+      recordTitle: title,
+      fields: def.fields_json.map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        required: f.required,
+      })),
+      data,
+      canEdit,
+      setTitle,
+      setField: (key, value) => setData((prev) => ({ ...prev, [key]: value })),
+      saveDraft: () => {
+        void saveDraftRecord({ keepOpen: true });
+      },
+      uploadingKey,
+      uploadFieldImage: (key, file) => void uploadFieldImage(key, file),
+    });
+  }, [onBridgeChange, def, editId, title, data, canEdit, uploadingKey]);
+
+  useEffect(() => {
+    return () => {
+      onBridgeChange?.(null);
+    };
+  }, [onBridgeChange]);
 
   async function setStatus(id: string, status: string) {
     if (status === 'in_review' && !canSubmit) return;
@@ -326,24 +395,8 @@ export function CmsCustomModulePanel({
                                       onChange={(e) => {
                                         const file = e.target.files?.[0] ?? null;
                                         e.target.value = '';
-                                        if (!file || !user) return;
-                                        setUploadingKey(f.key);
-                                        setError(null);
-                                        void uploadClientCmsImage({
-                                          clientId,
-                                          instanceId,
-                                          file,
-                                          userId: user.id,
-                                          altText: f.label,
-                                        })
-                                          .then((row) => {
-                                            setData((prev) => ({ ...prev, [f.key]: row.storage_path }));
-                                            setMessage(`${f.label} uploaded.`);
-                                          })
-                                          .catch((err) =>
-                                            setError(err instanceof Error ? err.message : 'Upload failed'),
-                                          )
-                                          .finally(() => setUploadingKey(null));
+                                        if (!file) return;
+                                        void uploadFieldImage(f.key, file);
                                       }}
                                     />
                                   </label>

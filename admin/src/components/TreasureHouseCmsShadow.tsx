@@ -7,6 +7,7 @@ import {
   type ThShadowNavItem,
 } from '../lib/treasureHouseCmsShadow';
 import { supabase } from '../lib/supabase';
+import type { TreasureHouseEditorBridge } from '../visual-studio/tools/TreasureHouseStudioTools';
 
 type Props = {
   instanceId: string;
@@ -15,6 +16,10 @@ type Props = {
   canSubmit: boolean;
   canPublish: boolean;
   canUploadMedia: boolean;
+  /** Controlled section key from Visual Studio Layers (optional). */
+  activeSectionKey?: string | null;
+  onSectionChange?: (key: string) => void;
+  onBridgeChange?: (bridge: TreasureHouseEditorBridge | null) => void;
 };
 
 type Counts = {
@@ -32,6 +37,9 @@ export function TreasureHouseCmsShadow({
   canSubmit,
   canPublish,
   canUploadMedia,
+  activeSectionKey = null,
+  onSectionChange,
+  onBridgeChange,
 }: Props) {
   const [section, setSection] = useState<ThShadowNavItem>(TH_SHADOW_NAV[0]);
   const [counts, setCounts] = useState<Counts>({
@@ -41,6 +49,21 @@ export function TreasureHouseCmsShadow({
     events: 0,
     sermons: 0,
   });
+
+  useEffect(() => {
+    if (!activeSectionKey) return;
+    const next = TH_SHADOW_NAV.find((n) => n.key === activeSectionKey);
+    if (next && next.key !== section.key) setSection(next);
+  }, [activeSectionKey, section.key]);
+
+  useEffect(() => {
+    if (section.kind !== 'module') onBridgeChange?.(null);
+  }, [section.kind, onBridgeChange]);
+
+  function selectSection(item: ThShadowNavItem) {
+    setSection(item);
+    onSectionChange?.(item.key);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -93,7 +116,7 @@ export function TreasureHouseCmsShadow({
             key={item.key}
             type="button"
             className={section.key === item.key ? 'on' : 'secondary'}
-            onClick={() => setSection(item)}
+            onClick={() => selectSection(item)}
           >
             {item.label}
           </button>
@@ -128,7 +151,7 @@ export function TreasureHouseCmsShadow({
           </div>
           <div className="toolbar" style={{ marginTop: '1rem' }}>
             {TH_SHADOW_NAV.filter((n) => n.key !== 'dashboard').slice(0, 8).map((item) => (
-              <button key={item.key} type="button" className="secondary" onClick={() => setSection(item)}>
+              <button key={item.key} type="button" className="secondary" onClick={() => selectSection(item)}>
                 {item.label}
               </button>
             ))}
@@ -152,7 +175,10 @@ export function TreasureHouseCmsShadow({
           <h3 style={{ marginTop: 0 }}>{section.label}</h3>
           <p>{section.description}</p>
           {section.key === 'mobile_designer' ? (
-            <button type="button" onClick={() => setSection(TH_SHADOW_NAV.find((n) => n.key === 'homepage')!)}>
+            <button
+              type="button"
+              onClick={() => selectSection(TH_SHADOW_NAV.find((n) => n.key === 'homepage')!)}
+            >
               Open Homepage document
             </button>
           ) : null}
@@ -175,6 +201,7 @@ export function TreasureHouseCmsShadow({
           canPublish={canPublish}
           focusModuleCode={section.moduleCode}
           hideHeader
+          onBridgeChange={onBridgeChange}
         />
       ) : null}
     </div>

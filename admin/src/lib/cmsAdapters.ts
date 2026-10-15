@@ -4,6 +4,7 @@ export type CmsAdapterCode =
   | 'okang_native'
   | 'sandbox_mock'
   | 'okang_dev_client'
+  | 'opswatch_marketing'
   | 'treasure_house_staging'
   | 'wordpress_rest'
   | 'custom_webhook'
@@ -38,6 +39,14 @@ export const CMS_ADAPTERS: CmsAdapterInfo[] = [
     integrationMode: 'external',
     externalLive: true,
     summary: 'Dedicated non-production client stub via gateway — vault credential_ref required.',
+  },
+  {
+    code: 'opswatch_marketing',
+    label: 'OpsWatch marketing website (HTTP)',
+    integrationMode: 'external',
+    externalLive: true,
+    summary:
+      'OpsWatch public website content only via gateway. No Command Center, customer, monitoring, or billing access. Vault credential_ref required.',
   },
   {
     code: 'treasure_house_staging',
