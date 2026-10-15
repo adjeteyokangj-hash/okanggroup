@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CmsCustomModulePanel } from '../components/CmsCustomModulePanel';
 import { CmsMediaLibrary } from '../components/CmsMediaLibrary';
-import { TreasureHouseCmsShadow } from '../components/TreasureHouseCmsShadow';
-import { VisualCmsEditor } from '../components/VisualCmsEditor';
+import { OpsWatchVisualStudio } from '../visual-studio/OpsWatchVisualStudio';
+import { NativeVisualStudio } from '../visual-studio/NativeVisualStudio';
+import { TreasureHouseWorkspace } from '../components/TreasureHouseWorkspace';
 import { useAuth } from '../lib/auth';
+import {
+  cmsConnectionStatusTone,
+  deriveCmsConnectionStatus,
+  explainCmsConnectionError,
+  labelCmsConnectionStatus,
+} from '../lib/cmsConnectionStatus';
 import { CmsBuilderDoc, normalizeBuilderDoc } from '../lib/cmsBuilder';
+import { isOpsWatchMarketingCms } from '../lib/okanggroupProducts';
 import { TH_SHADOW_SLUG } from '../lib/treasureHouseCmsShadow';
 import { supabase } from '../lib/supabase';
 
@@ -19,6 +27,9 @@ type Instance = {
   status: string;
   client_id: string;
   external_admin_url: string | null;
+  public_site_url?: string | null;
+  ownership_kind?: string | null;
+  product_code?: string | null;
   clients: { legal_name: string } | { legal_name: string }[] | null;
 };
 
@@ -62,6 +73,9 @@ type Connection = {
   status: string;
   notes: string | null;
   last_error: string | null;
+  base_url?: string | null;
+  integration_mode?: string | null;
+  last_healthy_at?: string | null;
 };
 
 type Revision = {
@@ -124,8 +138,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ClientCmsWorkspacePage() {
   const { instanceId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, can, profile } = useAuth();
   const isClientUser = profile?.account_kind === 'client_user';
+  const workspaceView = searchParams.get('view') === 'media' ? 'media' : 'studio';
   const [instance, setInstance] = useState<Instance | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -168,21 +184,29 @@ export function ClientCmsWorkspacePage() {
   async function load() {
     if (!instanceId || !user) return;
     setError(null);
+    let instRes = await supabase
+      .from('cms_instances')
+      .select(
+        'id, display_name, slug, cms_kind, cms_config_type, management_mode, status, client_id, external_admin_url, public_site_url, ownership_kind, product_code, clients(legal_name)',
+      )
+      .eq('id', instanceId)
+      .maybeSingle();
+    if (instRes.error) {
+      instRes = await supabase
+        .from('cms_instances')
+        .select(
+          'id, display_name, slug, cms_kind, cms_config_type, management_mode, status, client_id, external_admin_url, public_site_url, clients(legal_name)',
+        )
+        .eq('id', instanceId)
+        .maybeSingle();
+    }
     const [
-      { data: inst, error: iErr },
       { data: mods },
       { data: documents },
       { data: g },
       { data: conn },
       { data: tpl },
     ] = await Promise.all([
-      supabase
-        .from('cms_instances')
-        .select(
-          'id, display_name, slug, cms_kind, cms_config_type, management_mode, status, client_id, external_admin_url, clients(legal_name)',
-        )
-        .eq('id', instanceId)
-        .maybeSingle(),
       supabase
         .from('cms_modules')
         .select('id, module_code, module_name, description, hosted_in, is_sensitive, sort_order')
@@ -208,7 +232,7 @@ export function ClientCmsWorkspacePage() {
         .maybeSingle(),
       supabase
         .from('cms_connections')
-        .select('adapter_code, status, notes, last_error')
+        .select('adapter_code, status, notes, last_error, base_url, integration_mode, last_healthy_at')
         .eq('cms_instance_id', instanceId)
         .maybeSingle(),
       supabase
@@ -217,6 +241,8 @@ export function ClientCmsWorkspacePage() {
         .order('category')
         .order('name'),
     ]);
+    const inst = instRes.data;
+    const iErr = instRes.error;
     if (iErr || !inst) {
       setError(iErr?.message ?? 'CMS instance not found or not authorised.');
       setInstance(null);
@@ -565,9 +591,34 @@ export function ClientCmsWorkspacePage() {
 
   async function testConnection() {
     if (!instanceId) return;
+    const external =
+      connection?.adapter_code === 'opswatch_marketing' || instance?.product_code === 'opswatch';
+    if (external) {
+      const { data, error: err } = await supabase.functions.invoke('cms-integration-gateway', {
+        body: {
+          action: 'health',
+          instance_id: instanceId,
+          idempotency_key: `health-${instanceId}-${Date.now()}`,
+        },
+      });
+      await load();
+      if (err) {
+        const fromData =
+          data && typeof data === 'object' && 'error' in data
+            ? String((data as { error?: string }).error ?? '')
+            : '';
+        setError(explainCmsConnectionError(fromData || err.message));
+      } else {
+        const r = data as { ok?: boolean; error?: string };
+        if (r.ok) setMessage('Authenticated OpsWatch health check succeeded.');
+        else setError(explainCmsConnectionError(r.error ?? 'OpsWatch health check failed'));
+      }
+      return;
+    }
     const { data, error: err } = await supabase.rpc('test_cms_connection', {
       p_instance_id: instanceId,
     });
+    await load();
     if (err) setError(err.message);
     else {
       const r = data as { ok?: boolean; message?: string };
@@ -583,26 +634,104 @@ export function ClientCmsWorkspacePage() {
 
   if (instance.slug === TH_SHADOW_SLUG) {
     return (
-      <section className="cms-workspace">
+      <TreasureHouseWorkspace
+        instance={instance}
+        clientName={client?.legal_name ?? 'Client'}
+        error={error}
+        message={message}
+        canEdit={canEdit}
+        canSubmit={canSubmit}
+        canPublish={canPublish}
+        canUpload={canUpload}
+      />
+    );
+  }
+
+  const isOpsWatchMarketing = isOpsWatchMarketingCms({
+    adapterCode: connection?.adapter_code,
+    productCode: instance.product_code,
+    slug: instance.slug,
+    displayName: instance.display_name,
+  });
+
+  if (isOpsWatchMarketing) {
+    const connStatus = deriveCmsConnectionStatus(connection);
+    return (
+      <section className="cms-workspace cms-workspace-opswatch">
         <header className="page-head">
           <div>
             <h1>{instance.display_name}</h1>
             <p>
-              {client?.legal_name ?? 'Client'} · custom CMS shadow ·{' '}
-              <Link to="/my-cms">Back to My CMS</Link>
+              {instance.ownership_kind === 'okanggroup_product'
+                ? 'OkangGroup Product'
+                : (client?.legal_name ?? 'OkangGroup')}{' '}
+              · Managed Website · OpsWatch marketing website only
             </p>
+          </div>
+          <div className="page-head-actions">
+            <Link to="/my-cms" className="button-link secondary">
+              Back to My Client CMS
+            </Link>
+            <Link to="/cms-systems" className="button-link secondary">
+              Managed Websites
+            </Link>
           </div>
         </header>
         {error ? <div className="error">{error}</div> : null}
         {message ? <div className="ok">{message}</div> : null}
-        <TreasureHouseCmsShadow
-          instanceId={instance.id}
-          clientId={instance.client_id}
-          canEdit={canEdit}
-          canSubmit={canSubmit}
-          canPublish={canPublish}
-          canUploadMedia={canUpload}
-        />
+        {connection ? (
+          <div className="cms-conn-banner">
+            <div>
+              <span
+                className={`cms-conn-dot ${cmsConnectionStatusTone(connStatus) === 'ok' ? 'ok' : 'warn'}`}
+              />
+              <strong>{connection.adapter_code}</strong>
+              <span className="muted-sm">· {labelCmsConnectionStatus(connStatus)}</span>
+              {connection.last_error ? (
+                <span className="cms-conn-err">· {explainCmsConnectionError(connection.last_error)}</span>
+              ) : null}
+            </div>
+            <p className="muted-sm">
+              Edits apply only to the OpsWatch public marketing website. Customer dashboards,
+              monitoring, billing and OpsWatch administration stay out of this CMS.
+            </p>
+          </div>
+        ) : null}
+        <nav className="cms-tab-bar" aria-label="OpsWatch website workspace">
+          <button
+            type="button"
+            className={workspaceView === 'studio' ? 'active' : ''}
+            onClick={() => setSearchParams({})}
+          >
+            <span>Edit Website</span>
+            <em>Visual Studio</em>
+          </button>
+          <button
+            type="button"
+            className={workspaceView === 'media' ? 'active' : ''}
+            onClick={() => setSearchParams({ view: 'media' })}
+          >
+            <span>Media</span>
+            <em>Library</em>
+          </button>
+        </nav>
+        {connection?.adapter_code !== 'opswatch_marketing' ? (
+          <div className="error">
+            Attach the OpsWatch marketing adapter from Managed Websites before editing. Expected
+            adapter code: opswatch_marketing.
+          </div>
+        ) : workspaceView === 'media' ? (
+          <CmsMediaLibrary clientId={instance.client_id} instanceId={instance.id} canUpload={canUpload} />
+        ) : (
+          <OpsWatchVisualStudio
+            instanceId={instance.id}
+            clientId={instance.client_id}
+            canEdit={canEdit}
+            canPublish={canPublish}
+            canUploadMedia={canUpload}
+            publicSiteUrl={instance.public_site_url ?? instance.external_admin_url}
+          />
+        )}
       </section>
     );
   }
@@ -684,11 +813,13 @@ export function ClientCmsWorkspacePage() {
       {!editorExpanded && connection ? (
         <div className="cms-conn-banner">
           <div>
-            <span className={`cms-conn-dot ${connection.status === 'healthy' || connection.status === 'configured' ? 'ok' : 'warn'}`} />
+            <span className={`cms-conn-dot ${cmsConnectionStatusTone(deriveCmsConnectionStatus(connection)) === 'ok' ? 'ok' : 'warn'}`} />
             <strong>{connection.adapter_code}</strong>
-            <span className="muted-sm">· {connection.status}</span>
+            <span className="muted-sm">· {labelCmsConnectionStatus(deriveCmsConnectionStatus(connection))}</span>
             {connection.notes ? <span className="muted-sm">· {connection.notes}</span> : null}
-            {connection.last_error ? <span className="cms-conn-err">· {connection.last_error}</span> : null}
+            {connection.last_error ? (
+              <span className="cms-conn-err">· {explainCmsConnectionError(connection.last_error)}</span>
+            ) : null}
           </div>
           {instance.external_admin_url && connection.adapter_code !== 'okang_native' ? (
             <a href={instance.external_admin_url} target="_blank" rel="noreferrer">
@@ -985,7 +1116,7 @@ export function ClientCmsWorkspacePage() {
                 {selectedMod?.is_sensitive ? ' (sensitive / external).' : '.'}
               </p>
             ) : isNativeVisual && pageBody ? (
-              <VisualCmsEditor
+              <NativeVisualStudio
                 clientId={instance.client_id}
                 instanceId={instance.id}
                 documentKey={`${docId ?? `new-${moduleId}`}:${editorEpoch}`}
@@ -994,6 +1125,7 @@ export function ClientCmsWorkspacePage() {
                 slug={slug}
                 bodyJson={pageBody}
                 canEdit={canEdit}
+                canPublish={canPublish}
                 busy={busy}
                 expanded={editorExpanded}
                 onExpandedChange={setEditorExpanded}

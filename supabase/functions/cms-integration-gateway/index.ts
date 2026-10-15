@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { cmsConnectionPatchForThrownUpstream } from "./connection-status.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +14,8 @@ type Action =
   | "get_content"
   | "put_content"
   | "publish"
-  | "rollback";
+  | "rollback"
+  | "preview_token";
 
 type Body = {
   action: Action;
@@ -165,11 +167,14 @@ Deno.serve(async (req) => {
     client_id: string;
   };
 
-  // Authorisation: publish/put need publish or manage; health/capabilities need view via manage check on user client
-  const needsPublish = body.action === "publish" || body.action === "put_content" || body.action === "rollback";
-  if (needsPublish) {
-    // Prefer RPC-side checks for publish document
-    if (body.action === "publish") {
+  // Authorisation: publish/put need publish or manage; health/capabilities need view via manage check on user client.
+  // OpsWatch marketing uses module_code (no platform document_id). Other external adapters may use document_id.
+  if (body.action === "publish") {
+    if (connection.adapter_code === "opswatch_marketing") {
+      if (!body.module_code) {
+        return json(400, { ok: false, error: "module_code required for OpsWatch publish" });
+      }
+    } else {
       if (!body.document_id) {
         return json(400, { ok: false, error: "document_id required for publish" });
       }
@@ -304,6 +309,16 @@ Deno.serve(async (req) => {
           { revision_no: body.revision_no },
         );
         break;
+      case "preview_token":
+        remote = await callClientApi(
+          connection.base_url,
+          apiKey,
+          "/v1/preview-token",
+          "POST",
+          correlationId,
+          {},
+        );
+        break;
       default:
         return json(400, { ok: false, error: "Unknown action" });
     }
@@ -319,6 +334,11 @@ Deno.serve(async (req) => {
       p_request_json: { action: body.action, module_code: body.module_code },
       p_result_json: { ok: false, error: msg },
     });
+    // Network failures (expired tunnel DNS) must clear a previous healthy flag.
+    // Status becomes healthy again only after a later probe returns ok.
+    await admin.from("cms_connections").update(
+      cmsConnectionPatchForThrownUpstream(msg, correlationId),
+    ).eq("cms_instance_id", body.instance_id);
     return json(502, { ok: false, error: msg, correlation_id: correlationId });
   }
 

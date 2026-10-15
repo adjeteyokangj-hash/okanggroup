@@ -9,6 +9,7 @@ import {
   type CmsConnectionEvidence,
 } from '../lib/cmsConnectionStatus';
 import { looksLikeDevRecord } from '../lib/devRecords';
+import { isOpsWatchMarketingCms } from '../lib/okanggroupProducts';
 
 type CmsInst = {
   id: string;
@@ -84,7 +85,7 @@ export function MyCmsPage() {
         <div className="page-head-actions">
           <Link to="/cms-systems">
             <button type="button" className="secondary">
-              CMS Systems
+              Managed Websites
             </button>
           </Link>
         </div>
@@ -113,6 +114,11 @@ export function MyCmsPage() {
               const showExternal =
                 Boolean(cms.external_admin_url) &&
                 (connStatus === 'connected_development' || connStatus === 'connected_production');
+              const isOpsWatch = isOpsWatchMarketingCms({
+                adapterCode: conn?.adapter_code,
+                slug: cms.slug,
+                displayName: cms.display_name,
+              });
               return (
                 <tr key={r.id}>
                   <td>
@@ -121,8 +127,8 @@ export function MyCmsPage() {
                     <div className="muted-sm">{client?.legal_name ?? 'Client'}</div>
                   </td>
                   <td className="muted-sm">
-                    {cms.cms_config_type}
-                    <div>{cms.cms_kind}</div>
+                    {isOpsWatch ? 'Managed Website' : cms.cms_config_type}
+                    <div>{isOpsWatch ? 'OpsWatch marketing' : cms.cms_kind}</div>
                   </td>
                   <td>
                     <span className={`status-chip ${cmsConnectionStatusTone(connStatus)}`}>
@@ -130,6 +136,9 @@ export function MyCmsPage() {
                     </span>
                     {connStatus === 'standalone' ? (
                       <div className="muted-sm">Works inside OkangGroup — no live website linked</div>
+                    ) : null}
+                    {isOpsWatch && conn?.adapter_code ? (
+                      <div className="muted-sm">{conn.adapter_code}</div>
                     ) : null}
                   </td>
                   <td className="muted-sm">
@@ -146,9 +155,20 @@ export function MyCmsPage() {
                     ) : null}
                   </td>
                   <td className="actions">
-                    <Link to={`/my-cms/${cms.id}`}>
-                      <button type="button">Open workspace</button>
-                    </Link>
+                    {isOpsWatch ? (
+                      <>
+                        <Link to={`/my-cms/${cms.id}`}>
+                          <button type="button">Edit Website</button>
+                        </Link>
+                        <Link to={`/my-cms/${cms.id}?view=media`} className="button-link secondary">
+                          Media
+                        </Link>
+                      </>
+                    ) : (
+                      <Link to={`/my-cms/${cms.id}`}>
+                        <button type="button">Open workspace</button>
+                      </Link>
+                    )}
                     {showExternal ? (
                       <a href={cms.external_admin_url!} target="_blank" rel="noreferrer">
                         External admin

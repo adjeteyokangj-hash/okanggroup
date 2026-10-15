@@ -14,7 +14,8 @@
     "test:expense-math": "node --experimental-strip-types src/lib/expenseMath.test.mjs",
     "test:project-ops": "node --experimental-strip-types src/lib/projectOps.test.mjs",
     "test:signup-quarantine": "node src/lib/signupQuarantine.test.mjs",
-    "test": "npm run test:temp-password && npm run test:mfa && npm run test:cms-contrast && npm run test:cms-persist && npm run test:expense-math && npm run test:project-ops && npm run test:signup-quarantine"
+    "test:cms-connection-status": "node --experimental-strip-types src/lib/cmsConnectionStatus.test.mjs",
+    "test": "npm run test:temp-password && npm run test:mfa && npm run test:cms-contrast && npm run test:cms-persist && npm run test:expense-math && npm run test:project-ops && npm run test:signup-quarantine && npm run test:cms-connection-status"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

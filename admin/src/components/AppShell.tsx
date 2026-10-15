@@ -60,7 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: 'cms',
-    label: 'Content Management',
+    label: 'CMS Management',
     items: [
       {
         to: '/cms',
@@ -68,7 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
         anyOf: ['company_cms.read', 'company_cms.edit', 'company_cms.publish'],
       },
       { to: '/my-cms', label: 'My Client CMS', anyOf: ['*'] },
-      { to: '/cms-systems', label: 'CMS Systems', anyOf: ['clients.manage'] },
+      { to: '/cms-systems', label: 'Managed Websites', anyOf: ['clients.manage'] },
     ],
   },
   {

@@ -61,6 +61,8 @@ export function resolveNodeStyle(
     lineHeight: style.lineHeight,
     textAlign: style.textAlign,
     opacity: style.opacity,
+    objectFit: style.objectFit,
+    objectPosition: style.objectPosition,
   };
 
   if (display === 'grid' || style.gridColumns) {

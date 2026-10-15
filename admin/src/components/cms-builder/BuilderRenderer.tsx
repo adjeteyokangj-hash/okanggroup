@@ -1,5 +1,6 @@
 import { useEffect, useState, type DragEvent, type SyntheticEvent } from 'react';
 import {
+  BuilderInteraction,
   BuilderNavLink,
   BuilderNode,
   CmsBuilderDoc,
@@ -148,6 +149,15 @@ function brandFromChromeNode(node: BuilderNode, fallback: string): string {
   return fallback;
 }
 
+function interactionClasses(interactions: BuilderInteraction[] | undefined, nodeId: string) {
+  const mine = (interactions ?? []).filter((i) => i.targetId === nodeId);
+  const classes: string[] = [];
+  for (const i of mine) {
+    classes.push(`cms-ix-${i.trigger}-${i.action}`);
+  }
+  return classes;
+}
+
 function NodeView({
   node,
   selectedId,
@@ -168,6 +178,7 @@ function NodeView({
   siteName,
   mobileNavOpen,
   onMobileNavToggle,
+  interactions,
 }: {
   node: BuilderNode;
   selectedId: string | null;
@@ -188,7 +199,30 @@ function NodeView({
   siteName: string;
   mobileNavOpen: string | null;
   onMobileNavToggle: (nodeId: string) => void;
+  interactions: BuilderInteraction[];
 }) {
+  const ixClasses = interactionClasses(interactions, node.id);
+  const hasScrollFade = ixClasses.includes('cms-ix-scroll-fade');
+  const [inView, setInView] = useState(!hasScrollFade);
+
+  useEffect(() => {
+    if (node.hidden || !hasScrollFade) {
+      setInView(true);
+      return;
+    }
+    setInView(false);
+    const el = document.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`);
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setInView(true);
+      },
+      { threshold: 0.15 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasScrollFade, node.hidden, node.id]);
+
   if (node.hidden) return null;
   const selected = node.id === selectedId;
   const chrome = isChromeNode(node);
@@ -251,6 +285,8 @@ function NodeView({
     chrome ? 'is-chrome' : '',
     node.locked ? 'locked' : '',
     collapsed ? 'is-nav-collapsed' : '',
+    ...ixClasses,
+    hasScrollFade && inView ? 'cms-ix-in-view' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -374,7 +410,13 @@ function NodeView({
               <img
                 src={urlMap[node.props.imagePath]}
                 alt={node.props.imageAlt || ''}
-                style={{ width: '100%', display: 'block', borderRadius: node.style?.borderRadius }}
+                style={{
+                  width: '100%',
+                  display: 'block',
+                  borderRadius: node.style?.borderRadius,
+                  objectFit: (node.style?.objectFit as 'cover' | 'contain' | 'fill' | undefined) || 'cover',
+                  maxWidth: node.style?.maxWidth || undefined,
+                }}
               />
             ) : (
               <div className="cms-media-ph">Image</div>
@@ -409,6 +451,7 @@ function NodeView({
               siteName={siteName}
               mobileNavOpen={mobileNavOpen}
               onMobileNavToggle={onMobileNavToggle}
+              interactions={interactions}
             />
           ))}
         </>
@@ -503,6 +546,7 @@ export function BuilderRenderer({
             siteName={doc.brand.siteName || 'Website'}
             mobileNavOpen={chromeNavOpen}
             onMobileNavToggle={(id) => setChromeNavOpen((cur) => (cur === id ? null : id))}
+            interactions={doc.interactions ?? []}
           />
         ))
       )}
